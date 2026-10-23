@@ -1,0 +1,19 @@
+# Секреты — никогда в Git
+.env
+.env.*
+!.env.example
+
+# IDE и системные файлы
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Зависимости и сборка
+node_modules/
+api/vendor/
+web/dist/
+
+# Логи и локальные базы
+*.log
+*.sqlite

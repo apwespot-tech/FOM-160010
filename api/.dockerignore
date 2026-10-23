@@ -1,0 +1,5 @@
+# Секреты и зависимости не попадают в образ (слайд 16)
+.env
+vendor/
+node_modules/
+storage/logs/*

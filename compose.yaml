@@ -1,0 +1,43 @@
+# Окружение проекта: PostgreSQL + Laravel API + Vue (слайды 17, 20–23)
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: urfu
+      POSTGRES_USER: urfu
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urfu -d urfu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: urfu
+      DB_USERNAME: urfu
+      DB_PASSWORD: ${DB_PASS}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Node.js на компьютере не ставим: Vite работает в контейнере
+  web:
+    image: node:24-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports: ["127.0.0.1:5173:5173"]
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    depends_on: [api]
+
+volumes:
+  pgdata:

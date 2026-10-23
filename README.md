@@ -1,233 +1,80 @@
-# FOM-160010
+# FOM-160010 · Y.Novikova
 
-В рамках курса каждый студент выполняет **индивидуальный проект**, но весь учебный поток работает в **одном репозитории**:
+Рабочее окружение для индивидуального проекта курса «Веб-разработка».
+Правила работы с ветками общего репозитория описаны в README ветки `main`.
 
-**https://github.com/apwespot-tech/FOM-160010**
+| Ветка | Назначение |
+|---|---|
+| `Y.Novikova/main` | личная стабильная ветка |
+| `Y.Novikova/work-branch` | рабочая ветка задачи, сдаётся через PR в `Y.Novikova/main` |
 
-Цель: научиться сохранять изменения в Git, работать в отдельных ветках и отправлять изменения на проверку через **Pull Request (PR)**.
-
-> **Основное правило:** не изменяйте общую ветку `main`. Для каждого студента используется собственная `main`, а каждое изменение выполняется в отдельной рабочей ветке.
-
-## 1. Как устроены ветки
-
-Пример для студента с префиксом `A.Pirozhkov`:
+## Структура
 
 ```text
-FOM-160010 (общий GitHub-репозиторий)
-│
-├── main                         ← общая ветка курса; не редактировать
-│
-└── A.Pirozhkov/main             ← личная стабильная ветка студента
-    ├── A.Pirozhkov/work-branch  ← первая задача
-    ├── A.Pirozhkov/feat-ui      ← следующая задача
-    └── A.Pirozhkov/fix-api      ← исправление ошибки
+FOM-160010/
+├── web/            # Vue 3 + TypeScript (Vite)
+├── api/            # PHP 8.3 / Laravel, маршрут /health
+├── compose.yaml    # PostgreSQL, Laravel API и Vue
+├── .env.example    # образец переменных
+├── .gitignore      # секреты и зависимости не попадают в Git
+└── README.md       # запуск и проверки
 ```
 
-**Важно:** рабочая ветка и личная `main` — это **разные ветки одного репозитория**, а не папки. Косая черта `/` входит в название ветки. Ветки `A.Pirozhkov/main` и `main` никак не связаны автоматическим слиянием.
+| Сервис | Адрес | Что это |
+|---|---|---|
+| `web` | http://localhost:5173 | Vue через Vite, запросы `/health` проксируются в API |
+| `api` | http://localhost:8000 | Laravel API |
+| `db` | `db:5432` внутри сети Docker | PostgreSQL 17, данные в томе `pgdata` |
 
-Замените `A.Pirozhkov` на свой уникальный префикс, согласованный с преподавателем. Во всех командах ниже используется пример `A.Pirozhkov`.
+На компьютере нужны только Git и Docker Desktop: PHP, Composer и Node.js работают в контейнерах.
 
-**Маршрут изменения:**
-
-```text
-A.Pirozhkov/main
-    ↓ создать рабочую ветку
-A.Pirozhkov/work-branch
-    ↓ изменить файлы → commit → push
-GitHub Pull Request
-    ↓ base = A.Pirozhkov/main; compare = A.Pirozhkov/work-branch
-A.Pirozhkov/main (после merge)
-```
-
-## 2. Подготовка GitHub и Git
-
-1. Создайте аккаунт на [github.com](https://github.com/).
-2. Передайте преподавателю свой **GitHub username** (не email и не пароль).
-3. Дождитесь приглашения в репозиторий `apwespot-tech/FOM-160010` и примите его в GitHub или по письму.
-4. Установите [Git](https://git-scm.com/downloads) и проверьте:
+## Запуск
 
 ```bash
-git --version
+# один раз: локальный файл секретов (в Git не попадает)
+cp .env.example .env          # Windows PowerShell: copy .env.example .env
+
+# собрать и запустить все сервисы
+docker compose up -d --build
 ```
 
-Укажите имя и email для подписи коммитов (вместо примеров — свои данные):
+Первый запуск занимает несколько минут: Docker скачивает образы, Composer и npm ставят зависимости.
+При старте контейнер `api` сам создаёт `api/.env` из образца, генерирует `APP_KEY` и применяет миграции.
+
+## Проверка готовности (слайд 25)
 
 ```bash
-git config --global user.name "Имя Фамилия"
-git config --global user.email "YOUR_GITHUB_EMAIL"
+docker compose ps                                   # контейнеры db, api, web запущены
+docker compose exec db pg_isready -U urfu -d urfu   # accepting connections
+curl -i http://127.0.0.1:8000/health                # 200 OK, {"status":"ok","database":"ok"}
 ```
 
-Для HTTPS GitHub используйте вход через Git Credential Manager, GitHub CLI или персональный токен. **Пароль аккаунта GitHub нельзя использовать как пароль для `git push`.** Токены, пароли и SSH-ключи никогда не добавляйте в репозиторий.
+Страница http://localhost:5173 показывает три зелёные точки: Vue, Laravel API и PostgreSQL.
 
-## 3. Первый запуск: клонирование и личная `main`
-
-Эти действия выполняются **один раз**:
-
-```bash
-# 1. Получить общую копию репозитория
-git clone https://github.com/apwespot-tech/FOM-160010.git
-cd FOM-160010
-
-# 2. Обновить сведения об удалённых ветках
-git fetch origin
-
-# 3. Создать личную main от общей main
-git switch -c A.Pirozhkov/main origin/main
-
-# 4. Отправить свою ветку на GitHub
-git push -u origin A.Pirozhkov/main
-
-# 5. Проверить активную ветку и чистоту каталога
-git branch --show-current
-git status
-```
-
-Ожидаемая активная ветка: `A.Pirozhkov/main`.
-
-Если личная ветка **уже была создана на GitHub**, не создавайте её повторно. Вместо пункта 3 выполните:
-
-```bash
-git fetch origin
-git switch --track origin/A.Pirozhkov/main
-```
-
-## 4. Работа над задачей: `work-branch`
-
-**Никогда не разрабатывайте функциональность непосредственно в `A.Pirozhkov/main`.** Начинайте задачу от актуального состояния своей основной ветки:
-
-```bash
-# 1. Переключиться на личную main
-git switch A.Pirozhkov/main
-
-# 2. Подтянуть принятые изменения (если они были)
-git pull --ff-only origin A.Pirozhkov/main
-
-# 3. Создать новую рабочую ветку
-git switch -c A.Pirozhkov/work-branch
-
-# 4. Внести изменения в файлы проекта
-# Например, обновить README.md или код приложения
-
-# 5. Проверить изменения
-git status
-git diff
-
-# 6. Добавить нужные файлы в индекс
-git add README.md
-# Для нескольких файлов укажите их пути; перед git add . проверьте .gitignore
-
-# 7. Создать осмысленный коммит
-git commit -m "docs: describe project MVP"
-
-# 8. Опубликовать рабочую ветку
-git push -u origin A.Pirozhkov/work-branch
-```
-
-Пока Pull Request не принят, можно продолжать работу в **этой же** ветке: делать новые коммиты и выполнять `git push`. Они автоматически появятся в открытом PR.
-
-Для следующей задачи после слияния создавайте **новую ветку** от обновлённой личной `main`, например `A.Pirozhkov/feat-bookings`. Не переиспользуйте старую ветку с уже завершённым PR.
-
-## 5. Pull Request — сдача изменений
-
-Откройте [репозиторий GitHub](https://github.com/apwespot-tech/FOM-160010) → **Pull requests** → **New pull request**.
-
-Проверьте **обе** выбранные ветки:
-
-| Поле GitHub | Значение |
+| Часть | Признак готовности |
 |---|---|
-| **base** — куда влить изменения | `A.Pirozhkov/main` |
-| **compare** — откуда взять изменения | `A.Pirozhkov/work-branch` |
+| GitHub | `Y.Novikova/main`, `Y.Novikova/work-branch` и PR |
+| Vue | страница открывается |
+| PHP / Laravel | `GET /health` → 200 |
+| Docker | контейнеры видны в `docker compose ps` |
+| PostgreSQL | `pg_isready` подтверждает готовность |
 
-**Не оставляйте `base: main`!** Общая ветка курса не предназначена для сдачи индивидуальных работ.
+## Повседневные команды
 
-В описании PR укажите:
-
-- Что сделано (2–5 предложений).
-- Как проверить (команды запуска, адреса страниц или API).
-- Что осталось незавершённым, если есть.
-- При необходимости — скриншот интерфейса.
-
-После проверки и одобрения сделайте **Merge pull request** в свою ветку `A.Pirozhkov/main` (если преподаватель не установил иной порядок принятия). Если GitHub не показывает возможность слияния, сообщите преподавателю; права и проверки могут ограничивать merge.
-
-### После объединения PR
-
-Обновите свою локальную основную ветку:
-
-```bash
-git switch A.Pirozhkov/main
-git pull --ff-only origin A.Pirozhkov/main
-```
-
-Только после этого начинайте следующую задачу. Старую рабочую ветку можно удалить **локально**, если изменения уже слиты и не нужны:
-
-```bash
-git branch -d A.Pirozhkov/work-branch
-```
-
-## 6. Ежедневные команды Git
-
-| Команда | Назначение |
+| Команда | Зачем |
 |---|---|
-| `git status` | Посмотреть изменённые файлы и текущую ветку |
-| `git branch --show-current` | Узнать имя активной ветки |
-| `git branch -a` | Показать локальные и удалённые ветки |
-| `git diff` | Посмотреть ещё не добавленные в индекс правки |
-| `git diff --staged` | Посмотреть, что войдёт в следующий коммит |
-| `git add <путь>` | Подготовить конкретный файл к коммиту |
-| `git commit -m "..."` | Зафиксировать изменение |
-| `git push` | Отправить коммиты текущей настроенной ветки на GitHub |
-| `git fetch origin` | Получить сведения о ветках без слияния |
-| `git pull --ff-only` | Обновить текущую ветку без автоматического merge-коммита |
-| `git log --oneline -5` | Посмотреть последние пять коммитов |
+| `docker compose up -d --build` | собрать и запустить |
+| `docker compose ps` | что запущено |
+| `docker compose logs -f api` | логи API |
+| `docker compose down` | остановить |
 
-**Примеры сообщений коммитов:** `feat: add room list`, `fix: prevent booking overlap`, `docs: update README`, `chore: configure docker`.
+`docker compose down -v` удаляет ещё и том с базой — не использовать без необходимости.
 
-## 7. Что нельзя публиковать
+## Если не работает
 
-**Не добавляйте в Git:**
-
-```gitignore
-.env
-.env.*
-!.env.example
-node_modules/
-api/vendor/
-web/dist/
-*.sqlite
-```
-
-Если используются персональные ключи, дампы БД или локальные IDE-файлы — исключите их дополнительно. `.gitignore` **не удаляет секреты из истории**, если они уже были закоммичены. При утечке токен необходимо отозвать или заменить.
-
-**Добавлять можно:** исходный код, `README.md`, `compose.yaml`, `Dockerfile`, `composer.lock`, lock-файлы npm и `.env.example` **без реальных секретов**.
-
-## 8. Частые ошибки
-
-**`Permission denied` / `403` при `git push`**
-
-Проверьте, что приняли приглашение на GitHub, используете нужный аккаунт и имеете право записи. Не вводите пароль GitHub как Git-пароль.
-
-**`fatal: a branch named ... already exists`**
-
-Ветка уже есть локально. Перейдите в неё: `git switch A.Pirozhkov/main`. Если она существует только на GitHub, сначала выполните `git fetch origin`.
-
-**`src refspec ... does not match any`**
-
-Проверьте имя ветки командой `git branch --show-current`. Для новой пустой ветки сначала создайте коммит.
-
-**GitHub предлагает PR в общую `main`**
-
-В форме **Open a pull request** вручную поменяйте **base** на `A.Pirozhkov/main`. Не нажимайте merge до проверки направления.
-
-**`Your branch is behind ...`**
-
-Переключитесь на личную `main` и выполните `git pull --ff-only origin A.Pirozhkov/main`. Затем создавайте следующую ветку. Если есть локальные незафиксированные изменения, сначала разберитесь с ними.
-
-**`nothing to commit, working tree clean`**
-
-Git не видит изменений. Проверьте текущую папку, ветку и `git status`. Это не ошибка, если всё уже закоммичено.
-
----
-
-**Репозиторий курса:** https://github.com/apwespot-tech/FOM-160010
-
-**Дополнительная документация:** [Pro Git](https://git-scm.com/book/ru/v2) · [GitHub Pull Requests](https://docs.github.com/en/pull-requests)
+| Симптом | Что проверить |
+|---|---|
+| Docker не отвечает | `docker info`, запущен ли Docker Desktop |
+| Порт занят | `docker compose ps`, `netstat -ano \| findstr :8000` |
+| API не отвечает | `docker compose logs api` |
+| База недоступна | внутри Docker хост базы — `db`, а не `localhost` |
