@@ -1,0 +1,13 @@
+*.log
+*.pyc
+.DS_Store
+.claude/
+.env
+.idea/
+.pytest_cache/
+.venv/
+.vscode/
+CLAUDE.md
+__pycache__/
+dist/
+node_modules/

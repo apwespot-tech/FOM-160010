@@ -1,0 +1,13 @@
+[project]
+name = "finance-planner-api"
+version = "0.1.0"
+description = "Backend of the personal finance planner"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1.2,<6.2",
+    "django-ninja>=1.7.1,<2",
+    "psycopg[binary]>=3.3.6,<4",
+]
+
+[tool.uv]
+package = false
