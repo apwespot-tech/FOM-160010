@@ -1,0 +1,80 @@
+name: finance-planner
+
+services:
+  db:
+    image: postgres:18-alpine
+    env_file:
+      - config/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ./api
+    env_file:
+      - config/.env
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "healthcheck.py"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    develop:
+      watch:
+        - action: sync
+          path: ./api
+          target: /app
+          ignore:
+            - .venv/
+            - Dockerfile
+            - __pycache__/
+            - pyproject.toml
+            - uv.lock
+        - action: rebuild
+          path: ./api/Dockerfile
+        - action: rebuild
+          path: ./api/pyproject.toml
+        - action: rebuild
+          path: ./api/uv.lock
+
+  web:
+    build:
+      context: ./web
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./web
+          target: /app
+          ignore:
+            - Dockerfile
+            - dist/
+            - node_modules/
+            - package-lock.json
+            - package.json
+        - action: rebuild
+          path: ./web/Dockerfile
+        - action: rebuild
+          path: ./web/package.json
+        - action: rebuild
+          path: ./web/package-lock.json
+
+volumes:
+  postgres_data:
