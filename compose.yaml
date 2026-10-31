@@ -27,5 +27,18 @@ services:
     volumes:
       - ./api:/app
 
+  web:
+    build: ./web
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      # node_modules остаются из образа и не перекрываются исходниками хоста
+      - /app/node_modules
+
 volumes:
   db-data:

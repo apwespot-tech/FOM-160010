@@ -7,7 +7,8 @@
 - [docs/project.md](docs/project.md) — назначение, роли, рамка MVP
 - [docs/architecture.md](docs/architecture.md) — стек, схема сервисов, структура репозитория
 - [docs/nfr.md](docs/nfr.md) — нефункциональные требования
-- [docs/rules.md](docs/rules.md) — правила разработки (код-стайл, слои, тесты, коммиты)
+- [docs/rules.md](docs/rules.md) — правила разработки (код-стайл, слои, тесты, коммиты, UI, стандарт окон и редактирования)
+- [docs/backlog.md](docs/backlog.md) — доработки на будущее (ещё не в работе)
 - [docs/git-workflow.md](docs/git-workflow.md) — ветки и PR по правилам курса
 - [openspec/specs/](openspec/specs/) — функциональные требования к реализованному поведению
 - [openspec/changes/](openspec/changes/) — изменения в работе
@@ -21,3 +22,4 @@
 - Операции с лимитами — атомарно в одной транзакции.
 - Не коммитить в `main`; не коммитить `.env` и секреты.
 - Документация и артефакты OpenSpec — на русском.
+- UI — по разделу «UI» в `docs/rules.md`: mobile-first, без градиентов и эмодзи, редактирование данных в той же раскладке, что и просмотр.

@@ -12,17 +12,18 @@ Vue 3 + TypeScript + Vite · Python (FastAPI) · PostgreSQL · Docker Compose.
 
 ## Запуск
 
-Требования: Docker и Docker Compose v2. Сейчас реализован только backend.
+Требования: Docker и Docker Compose v2. Сейчас готовы вход, онбординг и профиль.
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-При старте контейнер `api` применяет миграции БД.
+При старте контейнер `api` применяет миграции БД. Frontend (dev-сервер Vite) проксирует `/api` в контейнер `api`, поэтому в браузере всё работает на одном адресе.
 
 | Сервис | Адрес |
 |---|---|
+| **Сайт** | http://localhost:5173 |
 | API | http://localhost:8000/api |
 | Документация API (Swagger) | http://localhost:8000/api/docs |
 | PostgreSQL | localhost:5432 (логин/пароль из `.env`) |
@@ -35,7 +36,9 @@ docker compose down
 
 ### Вход в разработке
 
-SMS не отправляются. Код входа можно получить тестовой ручкой, которая работает только при `AUTH_TEST_ENDPOINTS=true`:
+SMS не отправляются. При `AUTH_TEST_ENDPOINTS=true` сайт показывает код входа прямо на экране ввода кода (оранжевая подсказка «Тестовый режим»). При `false` подсказки нет.
+
+Через API код можно получить тестовой ручкой (работает только при `AUTH_TEST_ENDPOINTS=true`):
 
 1. `POST /api/auth/code` с `{"phone": "+79991234567"}`
 2. `GET /api/auth/test/code?phone=%2B79991234567` — вернёт код
@@ -60,6 +63,18 @@ docker compose run --rm api sh -c "ruff check . && ruff format --check . && mypy
 
 > БД `app_test` создаётся init-скриптом при первой инициализации тома. Если том `db-data` был создан раньше, пересоздайте его: `docker compose down -v`.
 
+Frontend — тесты (Vitest), линтер, форматирование и типы:
+
+```bash
+docker compose run --rm web npm test
+```
+
+```bash
+docker compose run --rm web sh -c "npm run lint && npm run format:check && npm run typecheck"
+```
+
+> `node_modules` фронтенда живут внутри образа `web`. После изменения `web/package.json` пересоберите его: `docker compose build web` (при необходимости с `docker compose up -d --renew-anon-volumes web`).
+
 ## Документация
 
 | Документ | Содержание |
@@ -69,4 +84,5 @@ docker compose run --rm api sh -c "ruff check . && ruff format --check . && mypy
 | [docs/nfr.md](docs/nfr.md) | Нефункциональные требования |
 | [docs/rules.md](docs/rules.md) | Правила разработки |
 | [docs/git-workflow.md](docs/git-workflow.md) | Git-процесс курса: ветки и Pull Request |
+| [docs/backlog.md](docs/backlog.md) | Доработки на будущее |
 | [openspec/specs/](openspec/specs/) | Функциональные требования (OpenSpec) |
