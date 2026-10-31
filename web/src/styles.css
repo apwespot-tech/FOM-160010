@@ -22,6 +22,8 @@
   --app-gutter: 16px;
   --app-header-height: 56px;
   --app-touch-target: 44px;
+  /* Многострочное поле и место под многострочный текст в просмотре — одной высоты */
+  --app-textarea-min-height: 96px;
 }
 
 @media (min-width: 640px) {

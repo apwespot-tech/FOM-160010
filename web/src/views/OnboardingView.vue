@@ -8,7 +8,7 @@ const router = useRouter()
 const session = useSessionStore()
 
 async function onSaved() {
-  await router.replace('/profile')
+  await router.replace('/')
 }
 </script>
 

@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 
 import type { TokenPair } from '@/api/auth'
+import type { Category, EventItem } from '@/api/events'
 import type { Profile } from '@/api/profile'
 
 export interface MockRequest {
@@ -94,4 +95,32 @@ export const completeProfile: Profile = {
   age: 26,
   telegram: '@anna_k',
   profile_completed: true,
+}
+
+export const categories: Category[] = [
+  { id: 1, name: 'Настольные игры' },
+  { id: 2, name: 'Прогулки' },
+  { id: 3, name: 'Спорт' },
+  { id: 4, name: 'Кино' },
+]
+
+/** Мероприятие другого организатора через сутки после 2026-10-31 12:00 МСК. */
+export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
+  return {
+    id: 'e1',
+    title: 'Настолки в антикафе',
+    description: 'Играем в «Каркассон»',
+    place: 'Антикафе «Циферблат»',
+    starts_at: '2026-11-01T16:00:00Z',
+    duration_minutes: 120,
+    category: { id: 1, name: 'Настольные игры' },
+    max_participants: 10,
+    min_age: 0,
+    organizer: { id: 'org-1', name: 'Борис Петров' },
+    participants_count: 3,
+    free_places: 7,
+    is_full: false,
+    is_joined: false,
+    ...overrides,
+  }
 }

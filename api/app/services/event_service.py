@@ -1,8 +1,9 @@
+import enum
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Row, Select, delete, exists, func, select
+from sqlalchemy import ColumnElement, Row, ScalarSelect, Select, delete, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,15 +27,20 @@ def list_categories(session: Session) -> Sequence[Category]:
 # --- чтение мероприятий ---
 
 
-def _view_query(viewer_id: uuid.UUID) -> Select[Event, str, str | None, int, bool]:
-    """Мероприятие с категорией, именем организатора, числом участников и признаком записи."""
-    participants_count = (
+def _participants_count() -> ScalarSelect[int]:
+    """Число записанных на мероприятие — коррелированный подзапрос к строке events."""
+    return (
         select(func.count())
         .select_from(EventParticipant)
         .where(EventParticipant.event_id == Event.id)
         .correlate(Event)
         .scalar_subquery()
     )
+
+
+def _view_query(viewer_id: uuid.UUID) -> Select[Event, str, str | None, int, bool]:
+    """Мероприятие с категорией, именем организатора, числом участников и признаком записи."""
+    participants_count = _participants_count()
     is_joined = (
         exists()
         .where(EventParticipant.event_id == Event.id, EventParticipant.user_id == viewer_id)
@@ -65,18 +71,62 @@ def get_event_view(session: Session, viewer_id: uuid.UUID, event_id: uuid.UUID) 
     return _to_view(row)
 
 
-def list_upcoming_events(
+class EventScope(enum.StrEnum):
+    ALL = "all"
+    JOINED = "joined"
+    ORGANIZED = "organized"
+
+
+class EventPeriod(enum.StrEnum):
+    UPCOMING = "upcoming"
+    PAST = "past"
+
+
+def list_events(
     session: Session,
     now: datetime,
-    viewer_id: uuid.UUID,
+    viewer: User,
     *,
+    scope: EventScope,
+    period: EventPeriod,
+    min_free_places: int | None,
     category_id: int | None,
     starts_from: datetime | None,
     starts_to: datetime | None,
     limit: int,
     offset: int,
 ) -> tuple[list[EventView], int]:
-    conditions = [Event.starts_at > now]
+    if scope is EventScope.ALL and period is EventPeriod.PAST:
+        raise AppError(
+            422,
+            "past_requires_scope",
+            "Прошедшие мероприятия доступны только в разделах «Участвую» и «Организую»",
+        )
+
+    viewer_id = viewer.id
+    conditions: list[ColumnElement[bool]] = []
+    if scope is EventScope.ALL and viewer.birth_date is not None:
+        # В общем каталоге — только то, на что пользователь может записаться по возрасту
+        conditions.append(Event.min_age <= calculate_age(viewer.birth_date, now.date()))
+    if scope is EventScope.JOINED:
+        conditions.append(
+            exists().where(
+                EventParticipant.event_id == Event.id, EventParticipant.user_id == viewer_id
+            )
+        )
+        conditions.append(Event.organizer_id != viewer_id)
+    elif scope is EventScope.ORGANIZED:
+        conditions.append(Event.organizer_id == viewer_id)
+
+    if period is EventPeriod.UPCOMING:
+        conditions.append(Event.starts_at > now)
+        order = (Event.starts_at.asc(), Event.id.asc())
+    else:
+        conditions.append(Event.starts_at <= now)
+        order = (Event.starts_at.desc(), Event.id.desc())
+
+    if min_free_places is not None:
+        conditions.append(Event.max_participants - _participants_count() >= min_free_places)
     if category_id is not None:
         conditions.append(Event.category_id == category_id)
     if starts_from is not None:
@@ -86,11 +136,7 @@ def list_upcoming_events(
 
     total = session.scalar(select(func.count()).select_from(Event).where(*conditions)) or 0
     rows = session.execute(
-        _view_query(viewer_id)
-        .where(*conditions)
-        .order_by(Event.starts_at, Event.id)
-        .limit(limit)
-        .offset(offset)
+        _view_query(viewer_id).where(*conditions).order_by(*order).limit(limit).offset(offset)
     )
     return [_to_view(row) for row in rows], total
 

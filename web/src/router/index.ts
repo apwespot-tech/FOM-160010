@@ -37,8 +37,19 @@ export const routes = [
     component: () => import('@/views/ProfileView.vue'),
     meta: { complete: true },
   },
-  { path: '/', redirect: '/profile' },
-  { path: '/:pathMatch(.*)*', redirect: '/profile' },
+  {
+    path: '/',
+    name: 'events',
+    component: () => import('@/views/EventsView.vue'),
+    meta: { complete: true },
+  },
+  {
+    path: '/events/:id',
+    name: 'event',
+    component: () => import('@/views/EventView.vue'),
+    meta: { complete: true },
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 type SessionState = { isAuthenticated: boolean; isProfileCompleted: boolean }
@@ -47,7 +58,7 @@ type SessionState = { isAuthenticated: boolean; isProfileCompleted: boolean }
 export function resolveRedirect(to: RouteLocationNormalized, session: SessionState): string | null {
   if (!session.isAuthenticated) return to.meta.guest ? null : '/login'
   if (!session.isProfileCompleted) return to.meta.incomplete ? null : '/onboarding'
-  return to.meta.complete ? null : '/profile'
+  return to.meta.complete ? null : '/'
 }
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {

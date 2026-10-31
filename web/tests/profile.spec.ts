@@ -61,7 +61,7 @@ describe('Онбординг', () => {
     expect(submitDisabled(wrapper)).toBe(false)
   })
 
-  it('сохраняет профиль и открывает страницу профиля', async () => {
+  it('сохраняет профиль и открывает главную', async () => {
     const api = profileApi(draftProfile)
     const { wrapper, router } = await renderApp('/onboarding')
 
@@ -70,7 +70,7 @@ describe('Онбординг', () => {
     await submitForm(wrapper)
 
     expect(api.calls('PATCH /profile')[0]?.body).toEqual({ name: 'Анна', birth_date: '2000-01-15' })
-    await waitForPath(router, '/profile')
+    await waitForPath(router, '/')
   })
 })
 

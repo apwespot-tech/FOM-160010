@@ -11,6 +11,8 @@ export default mergeConfig(
       setupFiles: ['tests/setup.ts'],
       restoreMocks: true,
       unstubGlobals: true,
+      // Форматы даты и времени проверяются в фиксированном часовом поясе (UTC+3)
+      env: { TZ: 'Europe/Moscow' },
     },
   }),
 )

@@ -3,8 +3,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 
 import { useCountdown } from '@/composables/useCountdown'
-import { formatRuDate, fromIsoDate, toIsoDate } from '@/utils/dates'
-import { formatAge, formatPhone, initials } from '@/utils/format'
+import {
+  dateRangeToParams,
+  formatDuration,
+  formatEventDate,
+  formatRuDate,
+  fromIsoDate,
+  fromLocalInputValue,
+  toIsoDate,
+  toLocalInputValue,
+  toOffsetIso,
+} from '@/utils/dates'
+import { formatAge, formatMinAge, formatPhone, formatPlaces, initials } from '@/utils/format'
 
 describe('даты', () => {
   const originalTz = process.env.TZ
@@ -77,5 +87,57 @@ describe('useCountdown', () => {
     vi.advanceTimersByTime(1_000)
     expect(remaining()).toBe(0)
     vi.useRealTimers()
+  })
+})
+
+describe('дата и время мероприятия (UTC+3)', () => {
+  const now = new Date(2026, 9, 31, 12, 0)
+
+  it('показывает время в часовом поясе браузера', () => {
+    expect(formatEventDate('2026-11-01T16:00:00Z', now)).toBe('вс, 1 ноября, 19:00')
+  })
+
+  it('добавляет год, если он не текущий', () => {
+    expect(formatEventDate('2027-01-01T07:00:00Z', now)).toBe('пт, 1 января 2027, 10:00')
+  })
+
+  it('toOffsetIso сохраняет локальное время со смещением', () => {
+    expect(toOffsetIso(new Date(2026, 10, 1, 19, 0))).toBe('2026-11-01T19:00:00+03:00')
+  })
+
+  it('datetime-local туда и обратно', () => {
+    const date = fromLocalInputValue('2026-11-01T19:30')
+    expect(date && toLocalInputValue(date)).toBe('2026-11-01T19:30')
+    expect(fromLocalInputValue('')).toBeNull()
+  })
+
+  it.each([
+    [90, '1 ч 30 мин'],
+    [120, '2 ч'],
+    [45, '45 мин'],
+  ])('длительность %i -> %s', (minutes, text) => {
+    expect(formatDuration(minutes)).toBe(text)
+  })
+
+  it('диапазон 1–2 декабря -> from начало 1-го, to начало 3-го', () => {
+    expect(dateRangeToParams(new Date(2026, 11, 1), new Date(2026, 11, 2))).toEqual({
+      from: '2026-12-01T00:00:00+03:00',
+      to: '2026-12-03T00:00:00+03:00',
+    })
+    expect(dateRangeToParams(null, null)).toEqual({ from: undefined, to: undefined })
+  })
+})
+
+describe('места и возраст', () => {
+  it.each([
+    [3, 10, 'Осталось 3 из 10 мест'],
+    [1, 21, 'Осталось 1 из 21 места'],
+    [0, 5, 'Мест нет'],
+  ])('formatPlaces(%i, %i)', (free, max, text) => {
+    expect(formatPlaces(free, max)).toBe(text)
+  })
+
+  it('formatMinAge', () => {
+    expect(formatMinAge(18)).toBe('18+')
   })
 })

@@ -5,8 +5,10 @@ from fastapi import APIRouter, Query, Response, status
 from pydantic import AwareDatetime
 
 from app.deps import CompletedUser, NowDep, OrganizerUser, ParticipantUser, SessionDep
+from app.models.event import MAX_PARTICIPANTS
 from app.schemas.event import EventCreate, EventOut, EventPage, EventUpdate, ParticipantOut
 from app.services import event_service
+from app.services.event_service import EventPeriod, EventScope
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -19,16 +21,22 @@ def list_events(
     user: CompletedUser,
     session: SessionDep,
     now: NowDep,
+    scope: EventScope = EventScope.ALL,
+    period: EventPeriod = EventPeriod.UPCOMING,
+    min_free_places: Annotated[int | None, Query(ge=1, le=MAX_PARTICIPANTS)] = None,
     category_id: int | None = None,
     starts_from: Annotated[AwareDatetime | None, Query(alias="from")] = None,
     starts_to: Annotated[AwareDatetime | None, Query(alias="to")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> EventPage:
-    views, total = event_service.list_upcoming_events(
+    views, total = event_service.list_events(
         session,
         now,
-        user.id,
+        user,
+        scope=scope,
+        period=period,
+        min_free_places=min_free_places,
         category_id=category_id,
         starts_from=starts_from,
         starts_to=starts_to,

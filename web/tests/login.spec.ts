@@ -178,13 +178,13 @@ describe('Ввод кода', () => {
     expect(localStorage.getItem('ik.refreshToken')).toBe('refresh-1')
   })
 
-  it('повторный вход открывает профиль', async () => {
+  it('повторный вход открывает главную', async () => {
     loginApi({ 'GET /profile': () => jsonResponse(200, completeProfile) })
     const { wrapper, router } = await openCodeStep()
 
     await enterCode(wrapper, '123456')
 
-    await waitForPath(router, '/profile')
+    await waitForPath(router, '/')
   })
 
   it('неверный код: ошибка и очищенное поле', async () => {

@@ -2,6 +2,7 @@ import { flushPromises, mount, type ComponentMountingOptions } from '@vue/test-u
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import ru from 'primelocale/ru.json'
 import PrimeVue from 'primevue/config'
+import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 import { vi } from 'vitest'
 import type { Component, Plugin } from 'vue'
@@ -18,7 +19,12 @@ import { jsonResponse, tokens, type mockApi } from './api'
 type PluginEntry = Plugin | [Plugin, ...unknown[]]
 
 export function primeVuePlugins(pinia: Pinia): PluginEntry[] {
-  return [pinia, [PrimeVue, { theme: themeOptions, locale: ru.ru }], ToastService]
+  return [
+    pinia,
+    [PrimeVue, { theme: themeOptions, locale: ru.ru }],
+    ToastService,
+    ConfirmationService,
+  ]
 }
 
 /** Монтирует компонент с Pinia и PrimeVue (без роутера). */
@@ -69,4 +75,11 @@ export async function waitForPath(router: Router, path: string): Promise<void> {
     }
   })
   await settle()
+}
+
+/** Элемент, отрисованный PrimeVue вне корня приложения (меню, панели — через teleport). */
+export function bodyGet(selector: string): HTMLElement {
+  const element = document.body.querySelector<HTMLElement>(selector)
+  if (!element) throw new Error(`Не найден ${selector}`)
+  return element
 }

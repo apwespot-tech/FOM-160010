@@ -56,13 +56,13 @@
 │   │   ├── App.vue         # шапка и RouterView
 │   │   ├── theme.ts        # пресет PrimeVue: фиолетовый primary, задел под тёмную тему
 │   │   ├── styles.css      # брейкпоинты, переменные --app-*, базовая раскладка
-│   │   ├── api/            # fetch-клиент (ApiError, single-flight refresh), auth, profile
+│   │   ├── api/            # fetch-клиент (ApiError, single-flight refresh), auth, profile, events
 │   │   ├── stores/         # Pinia: session (токены, профиль)
 │   │   ├── router/         # маршруты и гард доступа
-│   │   ├── composables/    # useCountdown
+│   │   ├── composables/    # useCountdown, формы профиля и мероприятия, список и его состояние в адресе
 │   │   ├── utils/          # даты, форматирование, брейкпоинты
-│   │   ├── components/     # PhoneStep, CodeStep, DevCodeHint, ProfileForm, ProfileCard
-│   │   └── views/          # LoginView, OnboardingView, ProfileView
+│   │   ├── components/     # шапка и меню, вход, профиль, карточки и формы мероприятий
+│   │   └── views/          # LoginView, OnboardingView, ProfileView, EventsView, EventView
 │   ├── tests/              # Vitest + Vue Test Utils (jsdom)
 │   ├── Dockerfile
 │   └── package.json
@@ -86,6 +86,10 @@
 
 - Сессия: access-токен только в памяти, refresh-токен в `localStorage` (`ik.refreshToken`). При загрузке страницы сессия восстанавливается через `POST /auth/refresh`.
 - При 401 клиент один раз обновляет токены и повторяет запрос. Обновление single-flight: одновременные запросы ждут один и тот же промис, потому что backend ротирует refresh-токен.
-- Гард маршрутов: гость → `/login`, незаполненный профиль → `/onboarding`, заполненный → `/profile`. Страницы грузятся лениво.
+- Гард маршрутов: гость → `/login`, незаполненный профиль → `/onboarding`, заполненный → главная `/` (список мероприятий). Страницы грузятся лениво.
+- Вкладка, период и фильтры списка мероприятий хранятся в адресе (`/?tab=joined&period=past&category=3`): ссылки и «Назад» восстанавливают список. Ответы на устаревшие запросы списка игнорируются.
+- Окно создания мероприятия одно на приложение (`CreateEventDialog` в `App.vue`), открывается через `useCreateEventDialog()` из шапки и с пустой вкладки «Организую».
+- Поля мероприятия (`EventFieldInput`) общие для окна создания и редактирования на месте; логика формы — `useEventForm`, по образцу `useProfileForm`.
+- Права в интерфейсе (кнопки управления, запись) — подсказки по данным мероприятия и профиля; проверяет их backend, после каждого действия страница перезапрашивает данные.
 - Подсказка с тестовым кодом (`DevCodeHint`) — временный костыль до SMS. Она показывается, только если `GET /api/auth/test/code` ответил 200. Удаляется вместе с `getTestCode`.
 - Адаптивность mobile-first, правила — в [rules.md](rules.md#ui).

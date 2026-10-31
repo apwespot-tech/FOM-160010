@@ -28,3 +28,14 @@ export function formatPhone(phone: string): string {
   if (!match) return phone
   return `+7 ${match[1]} ${match[2]}-${match[3]}-${match[4]}`
 }
+
+/** «Осталось 3 из 10 мест» или «Мест нет». */
+export function formatPlaces(free: number, max: number): string {
+  if (free <= 0) return 'Мест нет'
+  return `Осталось ${free} из ${max} ${plural(max, ['места', 'мест', 'мест'])}`
+}
+
+/** 18 -> «18+». */
+export function formatMinAge(age: number): string {
+  return `${age}+`
+}
