@@ -1,0 +1,150 @@
+"""Unit-тесты без HTTP: телефоны, токены, схемы профиля."""
+
+import uuid
+from datetime import UTC, date, datetime, timedelta
+
+import jwt
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings
+from app.phones import normalize_phone
+from app.schemas.profile import AdminProfileUpdate, ProfileUpdate, calculate_age
+from app.security import (
+    create_access_token,
+    decode_access_token,
+    generate_code,
+    generate_refresh_token,
+    hash_token,
+)
+
+NOW = datetime(2026, 10, 31, 12, 0, tzinfo=UTC)
+SETTINGS = Settings(database_url="postgresql+psycopg://unused", jwt_secret="s" * 32)
+
+
+# --- телефон ---
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["8 (999) 123-45-67", "+7 999 123 45 67", "+79991234567", "89991234567", "9991234567"],
+)
+def test_phone_normalized_to_e164(raw: str) -> None:
+    assert normalize_phone(raw) == "+79991234567"
+
+
+@pytest.mark.parametrize("raw", ["12ab", "", "123", "+7 999", "+7999123456789"])
+def test_invalid_phone_rejected(raw: str) -> None:
+    with pytest.raises(ValueError):
+        normalize_phone(raw)
+
+
+def test_admin_phones_normalized() -> None:
+    settings = Settings(
+        database_url="x", jwt_secret="x" * 32, admin_phones="8 999 000-00-01, +79990000002,"
+    )
+    assert settings.admin_phone_set == {"+79990000001", "+79990000002"}
+
+
+# --- коды и токены ---
+
+
+def test_generated_code_is_six_digits() -> None:
+    codes = {generate_code() for _ in range(200)}
+    assert all(len(code) == 6 and code.isdigit() for code in codes)
+    assert len(codes) > 1
+
+
+def test_refresh_token_is_random_and_hash_is_sha256() -> None:
+    token = generate_refresh_token()
+    assert token != generate_refresh_token()
+    assert len(hash_token(token)) == 64
+    assert hash_token(token) != token
+
+
+def test_access_token_claims_and_lifetime() -> None:
+    user_id = uuid.uuid4()
+    token = create_access_token(user_id, ["organizer", "participant"], NOW, SETTINGS)
+
+    payload = decode_access_token(token, NOW + timedelta(seconds=899), SETTINGS)
+    assert payload["sub"] == str(user_id)
+    assert payload["roles"] == ["organizer", "participant"]
+    assert payload["type"] == "access"
+
+    with pytest.raises(jwt.ExpiredSignatureError):
+        decode_access_token(token, NOW + timedelta(minutes=15), SETTINGS)
+
+
+def test_access_token_with_foreign_secret_rejected() -> None:
+    other = Settings(database_url="x", jwt_secret="o" * 32)
+    token = create_access_token(uuid.uuid4(), [], NOW, other)
+    with pytest.raises(jwt.InvalidSignatureError):
+        decode_access_token(token, NOW, SETTINGS)
+
+
+# --- профиль ---
+
+
+@pytest.mark.parametrize(
+    ("birth_date", "today", "age"),
+    [
+        (date(2000, 11, 1), date(2026, 10, 31), 25),
+        (date(2000, 10, 31), date(2026, 10, 31), 26),
+        (date(2000, 2, 29), date(2026, 2, 28), 25),
+        (date(2000, 2, 29), date(2026, 3, 1), 26),
+    ],
+)
+def test_calculate_age(birth_date: date, today: date, age: int) -> None:
+    assert calculate_age(birth_date, today) == age
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "   "},
+        {"name": "x" * 101},
+        {"name": None},
+        {"birth_date": None},
+        {"telegram": "@abc"},
+        {"telegram": "username"},
+        {"telegram": "@" + "a" * 33},
+        {"email": "not-an-email"},
+        {"photo_url": "ftp://example.com/a.png"},
+        {"photo_url": "not a url"},
+        {"phone": "+79991234567"},
+        {"roles": ["admin"]},
+        {"id": str(uuid.uuid4())},
+    ],
+)
+def test_invalid_own_profile_update(payload: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        ProfileUpdate.model_validate(payload)
+
+
+def test_valid_own_profile_update() -> None:
+    data = ProfileUpdate.model_validate(
+        {
+            "name": "  Анна  ",
+            "telegram": "@anna_k",
+            "email": "ann@example.com",
+            "photo_url": "https://example.com/a.png",
+            "birth_date": "1900-01-01",
+        }
+    )
+    assert data.name == "Анна"
+    assert data.model_fields_set == {"name", "telegram", "email", "photo_url", "birth_date"}
+
+
+def test_optional_fields_can_be_cleared() -> None:
+    data = ProfileUpdate.model_validate({"telegram": None, "email": None, "photo_url": None})
+    assert data.telegram is None and "telegram" in data.model_fields_set
+
+
+def test_admin_update_accepts_phone_but_not_roles() -> None:
+    assert AdminProfileUpdate.model_validate({"phone": "8 999 123 45 67"}).phone == "+79991234567"
+    with pytest.raises(ValidationError):
+        AdminProfileUpdate.model_validate({"roles": ["admin"]})
+    with pytest.raises(ValidationError):
+        AdminProfileUpdate.model_validate({"phone": None})
+    with pytest.raises(ValidationError):
+        AdminProfileUpdate.model_validate({"phone": "12ab"})
