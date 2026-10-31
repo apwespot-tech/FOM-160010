@@ -94,3 +94,30 @@ export function dateRangeToParams(
     to: to ? toOffsetIso(addDays(to, 1)) : undefined,
   }
 }
+
+const dayMonthYearFormat = new Intl.DateTimeFormat('ru', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/** «сегодня в 18:40», «вчера в 18:40», «12 ноября в 18:40», «12 ноября 2025 г. в 18:40». */
+export function formatCreatedAt(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso)
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const day = startOfDay(date).getTime()
+  if (day === startOfDay(now).getTime()) return `сегодня в ${time}`
+  if (day === addDays(now, -1).getTime()) return `вчера в ${time}`
+  const label =
+    date.getFullYear() === now.getFullYear()
+      ? dayMonthFormat.format(date)
+      : dayMonthYearFormat.format(date)
+  return `${label} в ${time}`
+}
+
+/** День для плитки «Когда»: «вс, 1 ноября» (год — если не текущий) и время «19:00». */
+export function formatEventDay(iso: string, now: Date = new Date()): { day: string; time: string } {
+  // formatEventDate: «вс, 1 ноября, 19:00» — день недели, дата, время
+  const [weekday = '', date = '', time = ''] = formatEventDate(iso, now).split(', ')
+  return { day: `${weekday}, ${date}`, time }
+}

@@ -56,10 +56,11 @@ def test_create_event(client: TestClient) -> None:
         "place": "Антикафе «Циферблат»",
         "starts_at": "2026-11-01T12:00:00Z",
         "duration_minutes": 120,
+        "created_at": "2026-10-31T12:00:00Z",
         "category": {"id": 1, "name": "Настольные игры"},
         "max_participants": 5,
         "min_age": 16,
-        "organizer": {"id": organizer["id"], "name": "Анна"},
+        "organizer": {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
         "participants_count": 1,
         "free_places": 4,
         "is_full": False,
@@ -73,7 +74,9 @@ def test_organizer_is_only_participant_after_create(client: TestClient) -> None:
 
     response = client.get(f"/api/events/{event['id']}/participants", headers=auth_header(organizer))
 
-    assert response.json() == [{"id": organizer["id"], "name": "Анна"}]
+    assert response.json() == [
+        {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None}
+    ]
 
 
 def test_full_event_representation(client: TestClient) -> None:
@@ -159,7 +162,50 @@ def test_view_foreign_event(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["is_joined"] is False
-    assert set(response.json()["organizer"]) == {"id", "name"}
+    assert set(response.json()["organizer"]) == {"id", "name", "photo_url", "telegram"}
+
+
+# --- контакты организатора ---
+
+PHOTO = "https://example.com/anna.jpg"
+
+
+def test_organizer_telegram_hidden_from_outsider(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER, telegram="@anna_org", photo_url=PHOTO)
+    outsider = register(client, OTHER)
+    event = create_event(client, organizer)
+
+    body = get_event(client, outsider, event["id"]).json()
+
+    assert body["organizer"]["telegram"] is None
+    assert body["organizer"]["photo_url"] == PHOTO
+    assert "phone" not in body["organizer"]
+    assert "email" not in body["organizer"]
+    catalog_item = client.get("/api/events", headers=auth_header(outsider)).json()["items"][0]
+    assert catalog_item["organizer"]["telegram"] is None
+
+
+def test_organizer_telegram_for_participant_and_admin(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER, telegram="@anna_org")
+    participant = register(client, OTHER)
+    admin = register(client, ADMIN_PHONE)
+    event = create_event(client, organizer)
+    join(client, participant, event["id"])
+
+    for viewer in (participant, admin, organizer):
+        assert get_event(client, viewer, event["id"]).json()["organizer"]["telegram"] == (
+            "@anna_org"
+        )
+
+
+def test_organizer_telegram_hidden_after_leave(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER, telegram="@anna_org")
+    participant = register(client, OTHER)
+    event = create_event(client, organizer)
+    join(client, participant, event["id"])
+    client.post(f"/api/events/{event['id']}/leave", headers=auth_header(participant))
+
+    assert get_event(client, participant, event["id"]).json()["organizer"]["telegram"] is None
 
 
 def test_view_past_event(client: TestClient, clock: FakeClock) -> None:

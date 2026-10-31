@@ -38,8 +38,13 @@ def _participants_count() -> ScalarSelect[int]:
     )
 
 
-def _view_query(viewer_id: uuid.UUID) -> Select[Event, str, str | None, int, bool]:
-    """Мероприятие с категорией, именем организатора, числом участников и признаком записи."""
+ViewRow = Row[Event, str, str | None, str | None, str | None, int, bool]
+
+
+def _view_query(
+    viewer_id: uuid.UUID,
+) -> Select[Event, str, str | None, str | None, str | None, int, bool]:
+    """Мероприятие с категорией, организатором, числом участников и признаком записи."""
     participants_count = _participants_count()
     is_joined = (
         exists()
@@ -47,28 +52,39 @@ def _view_query(viewer_id: uuid.UUID) -> Select[Event, str, str | None, int, boo
         .correlate(Event)
     )
     return (
-        select(Event, Category.name, User.name, participants_count, is_joined)
+        select(
+            Event,
+            Category.name,
+            User.name,
+            User.photo_url,
+            User.telegram,
+            participants_count,
+            is_joined,
+        )
         .join(Category, Category.id == Event.category_id)
         .join(User, User.id == Event.organizer_id)
     )
 
 
-def _to_view(row: Row[Event, str, str | None, int, bool]) -> EventView:
-    event, category_name, organizer_name, participants_count, is_joined = row
+def _to_view(row: ViewRow, viewer: User) -> EventView:
+    event, category_name, name, photo_url, telegram, participants_count, is_joined = row
     return EventView(
         event=event,
         category_name=category_name,
-        organizer_name=organizer_name or "",
+        organizer_name=name or "",
+        organizer_photo_url=photo_url,
+        # Контакт организатора — только записанным участникам и администратору
+        organizer_telegram=telegram if is_joined or viewer.is_admin else None,
         participants_count=participants_count,
         is_joined=is_joined,
     )
 
 
-def get_event_view(session: Session, viewer_id: uuid.UUID, event_id: uuid.UUID) -> EventView:
-    row = session.execute(_view_query(viewer_id).where(Event.id == event_id)).first()
+def get_event_view(session: Session, viewer: User, event_id: uuid.UUID) -> EventView:
+    row = session.execute(_view_query(viewer.id).where(Event.id == event_id)).first()
     if row is None:
         raise event_not_found()
-    return _to_view(row)
+    return _to_view(row, viewer)
 
 
 class EventScope(enum.StrEnum):
@@ -138,7 +154,7 @@ def list_events(
     rows = session.execute(
         _view_query(viewer_id).where(*conditions).order_by(*order).limit(limit).offset(offset)
     )
-    return [_to_view(row) for row in rows], total
+    return [_to_view(row, viewer) for row in rows], total
 
 
 # --- создание, изменение, удаление ---
@@ -147,7 +163,7 @@ def list_events(
 def create_event(session: Session, now: datetime, user: User, data: EventCreate) -> uuid.UUID:
     _ensure_future(data.starts_at, now)
     _ensure_category_exists(session, data.category_id)
-    event = Event(organizer_id=user.id, **data.model_dump())
+    event = Event(organizer_id=user.id, created_at=now, **data.model_dump())
     session.add(event)
     session.flush()
     # Организатор сразу записан и занимает одно место
@@ -246,14 +262,17 @@ def list_participants(session: Session, viewer: User, event_id: uuid.UUID) -> li
         raise event_not_found()
 
     rows = session.execute(
-        select(User.id, User.name)
+        select(User.id, User.name, User.photo_url, User.telegram)
         .join(EventParticipant, EventParticipant.user_id == User.id)
         .join(Event, Event.id == EventParticipant.event_id)
         .where(EventParticipant.event_id == event_id)
         # Организатор первым, даже если записи пришлись на одну и ту же метку времени
         .order_by(User.id != Event.organizer_id, EventParticipant.joined_at, User.id)
     )
-    return [ParticipantOut(id=user_id, name=name or "") for user_id, name in rows]
+    return [
+        ParticipantOut(id=user_id, name=name or "", photo_url=photo_url, telegram=telegram)
+        for user_id, name, photo_url, telegram in rows
+    ]
 
 
 # --- вспомогательное ---

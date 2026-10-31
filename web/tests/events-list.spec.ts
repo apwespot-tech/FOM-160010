@@ -300,7 +300,12 @@ describe('Карточка мероприятия в списке', () => {
         eventItem({
           id: 'b',
           is_joined: true,
-          organizer: { id: completeProfile.id, name: 'Анна Иванова' },
+          organizer: {
+            id: completeProfile.id,
+            name: 'Анна Иванова',
+            photo_url: null,
+            telegram: null,
+          },
         }),
       ]),
     )

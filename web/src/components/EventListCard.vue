@@ -2,7 +2,7 @@
 /** Карточка мероприятия в списке — ссылка на его страницу. */
 import Tag from 'primevue/tag'
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import type { EventItem } from '@/api/events'
 import { useSessionStore } from '@/stores/session'
@@ -12,11 +12,17 @@ import { formatMinAge, formatPlaces } from '@/utils/format'
 const props = defineProps<{ event: EventItem }>()
 
 const session = useSessionStore()
+const route = useRoute()
 const isOrganizer = computed(() => props.event.organizer.id === session.profile?.id)
 </script>
 
 <template>
-  <RouterLink :to="`/events/${event.id}`" class="event-card" data-testid="event-card">
+  <!-- С текущим query: список под окном сохраняет вкладку и фильтры -->
+  <RouterLink
+    :to="{ path: `/events/${event.id}`, query: route.query }"
+    class="event-card"
+    data-testid="event-card"
+  >
     <div class="event-card__top">
       <span class="event-card__category">{{ event.category.name }}</span>
       <time class="event-card__date" :datetime="event.starts_at">

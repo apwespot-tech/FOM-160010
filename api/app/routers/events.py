@@ -51,12 +51,12 @@ def create_event(
     body: EventCreate, user: OrganizerUser, session: SessionDep, now: NowDep
 ) -> EventOut:
     event_id = event_service.create_event(session, now, user, body)
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.get("/{event_id}")
 def get_event(event_id: uuid.UUID, user: CompletedUser, session: SessionDep) -> EventOut:
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.patch("/{event_id}")
@@ -64,7 +64,7 @@ def update_event(
     event_id: uuid.UUID, body: EventUpdate, user: CompletedUser, session: SessionDep, now: NowDep
 ) -> EventOut:
     event_service.update_event(session, now, user, event_id, body)
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -80,7 +80,7 @@ def join_event(
     event_id: uuid.UUID, user: ParticipantUser, session: SessionDep, now: NowDep
 ) -> EventOut:
     event_service.join_event(session, now, user, event_id)
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.post("/{event_id}/leave")
@@ -88,7 +88,7 @@ def leave_event(
     event_id: uuid.UUID, user: CompletedUser, session: SessionDep, now: NowDep
 ) -> EventOut:
     event_service.leave_event(session, now, user, event_id)
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.get("/{event_id}/participants")
@@ -107,4 +107,4 @@ def remove_participant(
     now: NowDep,
 ) -> EventOut:
     event_service.remove_participant(session, now, user, event_id, user_id)
-    return EventOut.from_view(event_service.get_event_view(session, user.id, event_id))
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))

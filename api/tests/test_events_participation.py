@@ -336,8 +336,14 @@ def test_remove_from_missing_event(client: TestClient) -> None:
 
 
 def test_participants_list(client: TestClient) -> None:
-    organizer = register(client, ORGANIZER, name="Анна")
-    other = register(client, OTHER, name="Борис")
+    organizer = register(client, ORGANIZER, name="Анна", email="anna@example.com")
+    other = register(
+        client,
+        OTHER,
+        name="Борис",
+        telegram="@boris_k",
+        photo_url="https://example.com/boris.jpg",
+    )
     event = create_event(client, organizer)
     join(client, other, event["id"])
 
@@ -345,8 +351,13 @@ def test_participants_list(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": organizer["id"], "name": "Анна"},
-        {"id": other["id"], "name": "Борис"},
+        {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
+        {
+            "id": other["id"],
+            "name": "Борис",
+            "photo_url": "https://example.com/boris.jpg",
+            "telegram": "@boris_k",
+        },
     ]
 
 

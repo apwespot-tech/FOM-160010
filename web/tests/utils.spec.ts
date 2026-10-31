@@ -5,6 +5,7 @@ import { defineComponent, h, ref } from 'vue'
 import { useCountdown } from '@/composables/useCountdown'
 import {
   dateRangeToParams,
+  formatCreatedAt,
   formatDuration,
   formatEventDate,
   formatRuDate,
@@ -14,7 +15,15 @@ import {
   toLocalInputValue,
   toOffsetIso,
 } from '@/utils/dates'
-import { formatAge, formatMinAge, formatPhone, formatPlaces, initials } from '@/utils/format'
+import {
+  formatAge,
+  formatFreePlaces,
+  formatMinAge,
+  formatPhone,
+  formatPlaces,
+  initials,
+  telegramUrl,
+} from '@/utils/format'
 
 describe('даты', () => {
   const originalTz = process.env.TZ
@@ -139,5 +148,31 @@ describe('места и возраст', () => {
 
   it('formatMinAge', () => {
     expect(formatMinAge(18)).toBe('18+')
+  })
+})
+
+describe('создание мероприятия и контакты (UTC+3)', () => {
+  const now = new Date(2026, 9, 31, 12, 0)
+
+  it.each([
+    ['2026-10-31T06:15:00Z', 'сегодня в 09:15'],
+    ['2026-10-30T15:40:00Z', 'вчера в 18:40'],
+    ['2026-10-12T15:40:00Z', '12 октября в 18:40'],
+    ['2025-11-12T15:40:00Z', '12 ноября 2025 г. в 18:40'],
+  ])('formatCreatedAt(%s) -> %s', (iso, text) => {
+    expect(formatCreatedAt(iso, now)).toBe(text)
+  })
+
+  it('telegramUrl убирает @', () => {
+    expect(telegramUrl('@boris_k')).toBe('https://t.me/boris_k')
+  })
+
+  it.each([
+    [1, 'остался 1 свободное место'],
+    [3, 'осталось 3 свободных места'],
+    [7, 'осталось 7 свободных мест'],
+    [0, 'свободных мест нет'],
+  ])('formatFreePlaces(%i)', (free, text) => {
+    expect(formatFreePlaces(free)).toBe(text)
   })
 })

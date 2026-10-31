@@ -103,7 +103,12 @@ def test_catalog_item_fields_for_viewer(client: TestClient) -> None:
 
     item = catalog(client, other).json()["items"][0]
 
-    assert item["organizer"] == {"id": organizer["id"], "name": "Анна"}
+    assert item["organizer"] == {
+        "id": organizer["id"],
+        "name": "Анна",
+        "photo_url": None,
+        "telegram": None,
+    }
     assert item["participants_count"] == 1
     assert item["free_places"] == 2
     assert item["is_full"] is False

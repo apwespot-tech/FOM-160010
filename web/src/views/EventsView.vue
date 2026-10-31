@@ -11,16 +11,19 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import { computed } from 'vue'
+import { RouterView } from 'vue-router'
 
 import type { EventPeriod } from '@/api/events'
 import EventFilters from '@/components/EventFilters.vue'
 import EventListCard from '@/components/EventListCard.vue'
 import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
-import { useEventList } from '@/composables/useEventList'
+import { provideEventListUpdates, useEventList } from '@/composables/useEventList'
 import { useEventListQuery, type EventTab } from '@/composables/useEventListQuery'
 
 const { state, params, activeFilters, update, resetFilters } = useEventListQuery()
-const { items, total, loading, error, reload, loadMore } = useEventList(params)
+const { items, total, loading, error, reload, loadMore, replaceItem, removeItem } =
+  useEventList(params)
+provideEventListUpdates({ replaceItem, removeItem })
 const { open: openCreate } = useCreateEventDialog()
 
 const periodOptions: { value: EventPeriod; label: string }[] = [
@@ -137,6 +140,9 @@ function retry() {
         />
       </div>
     </div>
+
+    <!-- Окно мероприятия (дочерний маршрут /events/:id) поверх списка -->
+    <RouterView />
   </main>
 </template>
 

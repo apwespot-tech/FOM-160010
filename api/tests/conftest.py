@@ -126,12 +126,18 @@ def auth_header(tokens: dict[str, Any]) -> dict[str, str]:
 
 
 def register(
-    client: TestClient, phone: str, name: str = "Анна", birth_date: str = "2000-01-15"
+    client: TestClient,
+    phone: str,
+    name: str = "Анна",
+    birth_date: str = "2000-01-15",
+    **profile: Any,
 ) -> dict[str, Any]:
-    """Вход и заполнение профиля. Возвращает токены и id пользователя."""
+    """Вход и заполнение профиля (доп. поля — telegram, photo_url...). Возвращает токены и id."""
     tokens = login(client, phone)
     response = client.patch(
-        "/api/profile", json={"name": name, "birth_date": birth_date}, headers=auth_header(tokens)
+        "/api/profile",
+        json={"name": name, "birth_date": birth_date, **profile},
+        headers=auth_header(tokens),
     )
     assert response.status_code == 200, response.text
     return {**tokens, "id": response.json()["id"]}

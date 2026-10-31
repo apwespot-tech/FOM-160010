@@ -42,12 +42,15 @@ export const routes = [
     name: 'events',
     component: () => import('@/views/EventsView.vue'),
     meta: { complete: true },
-  },
-  {
-    path: '/events/:id',
-    name: 'event',
-    component: () => import('@/views/EventView.vue'),
-    meta: { complete: true },
+    // Мероприятие открывается окном поверх списка: список остаётся смонтированным
+    children: [
+      {
+        path: 'events/:id',
+        name: 'event',
+        component: () => import('@/views/EventModal.vue'),
+        meta: { complete: true },
+      },
+    ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

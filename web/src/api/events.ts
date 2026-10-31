@@ -11,9 +11,12 @@ export interface Category {
   name: string
 }
 
+/** Человек в мероприятии. Telegram организатора — только записанным и администратору. */
 export interface PersonRef {
   id: string
   name: string
+  photo_url: string | null
+  telegram: string | null
 }
 
 export interface EventItem {
@@ -23,6 +26,7 @@ export interface EventItem {
   place: string
   starts_at: string
   duration_minutes: number | null
+  created_at: string
   category: Category
   max_participants: number
   min_age: MinAge

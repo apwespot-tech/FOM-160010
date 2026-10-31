@@ -63,14 +63,21 @@ class EventUpdate(BaseModel):
         return self
 
 
-class OrganizerOut(BaseModel):
+class PersonOut(BaseModel):
+    """Человек в мероприятии: без телефона и email."""
+
     id: uuid.UUID
     name: str
+    photo_url: str | None
+    telegram: str | None
 
 
-class ParticipantOut(BaseModel):
-    id: uuid.UUID
-    name: str
+class OrganizerOut(PersonOut):
+    """telegram заполнен только для записанных участников и администратора."""
+
+
+class ParticipantOut(PersonOut):
+    pass
 
 
 @dataclass(frozen=True)
@@ -80,6 +87,8 @@ class EventView:
     event: Event
     category_name: str
     organizer_name: str
+    organizer_photo_url: str | None
+    organizer_telegram: str | None
     participants_count: int
     is_joined: bool
 
@@ -91,6 +100,7 @@ class EventOut(BaseModel):
     place: str
     starts_at: datetime
     duration_minutes: int | None
+    created_at: datetime
     category: CategoryOut
     max_participants: int
     min_age: int
@@ -111,10 +121,16 @@ class EventOut(BaseModel):
             place=event.place,
             starts_at=event.starts_at,
             duration_minutes=event.duration_minutes,
+            created_at=event.created_at,
             category=CategoryOut(id=event.category_id, name=view.category_name),
             max_participants=event.max_participants,
             min_age=event.min_age,
-            organizer=OrganizerOut(id=event.organizer_id, name=view.organizer_name),
+            organizer=OrganizerOut(
+                id=event.organizer_id,
+                name=view.organizer_name,
+                photo_url=view.organizer_photo_url,
+                telegram=view.organizer_telegram,
+            ),
             participants_count=view.participants_count,
             free_places=free_places,
             is_full=free_places == 0,

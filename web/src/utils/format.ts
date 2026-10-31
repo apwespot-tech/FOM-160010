@@ -39,3 +39,16 @@ export function formatPlaces(free: number, max: number): string {
 export function formatMinAge(age: number): string {
   return `${age}+`
 }
+
+/** «@boris_k» -> https://t.me/boris_k */
+export function telegramUrl(telegram: string): string {
+  return `https://t.me/${telegram.replace(/^@/, '')}`
+}
+
+/** «осталось 7 свободных мест» */
+export function formatFreePlaces(free: number): string {
+  if (free <= 0) return 'свободных мест нет'
+  const left = plural(free, ['остался', 'осталось', 'осталось'])
+  const places = plural(free, ['свободное место', 'свободных места', 'свободных мест'])
+  return `${left} ${free} ${places}`
+}

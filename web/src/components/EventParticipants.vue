@@ -1,13 +1,20 @@
 <script setup lang="ts">
-/** Список участников мероприятия; автору и админу — «Исключить» у каждого, кроме организатора. */
+/**
+ * Участники мероприятия: фото или инициалы, имя, Telegram ссылкой;
+ * автору и админу — «Исключить» у каждого, кроме организатора.
+ */
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 
 import type { Participant } from '@/api/events'
+import PersonAvatar from '@/components/PersonAvatar.vue'
+import { telegramUrl } from '@/utils/format'
 
 defineProps<{
   participants: Participant[] | null
   organizerId: string
+  count: number
+  max: number
   /** Список доступен (записан или администратор) */
   visible: boolean
   canRemove: boolean
@@ -17,7 +24,9 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
 
 <template>
   <section class="participants" data-testid="participants">
-    <h2 class="participants__title">Участники</h2>
+    <h3 class="participants__title" data-testid="participants-title">
+      Участники ({{ count }}/{{ max }})
+    </h3>
     <p v-if="!visible" class="participants__hint" data-testid="participants-hidden">
       Список участников виден после записи
     </p>
@@ -28,7 +37,20 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
         class="participants__item"
         data-testid="participant"
       >
-        <span class="participants__name app-break">{{ participant.name }}</span>
+        <PersonAvatar :name="participant.name" :photo-url="participant.photo_url" />
+        <div class="participants__info">
+          <span class="participants__name app-break">{{ participant.name }}</span>
+          <a
+            v-if="participant.telegram"
+            :href="telegramUrl(participant.telegram)"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="participants__telegram"
+            data-testid="participant-telegram"
+          >
+            {{ participant.telegram }}
+          </a>
+        </div>
         <Tag
           v-if="participant.id === organizerId"
           value="Организатор"
@@ -53,9 +75,12 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
 
 <style scoped>
 .participants__title {
-  margin: 0 0 12px;
-  font-size: 1.125rem;
+  margin: 0 0 10px;
+  color: var(--p-primary-700);
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .participants__hint {
@@ -67,22 +92,39 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
   margin: 0;
   padding: 0;
   list-style: none;
+  display: grid;
+  gap: 8px;
 }
 
 .participants__item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  min-height: var(--app-touch-target);
-  border-bottom: 1px solid var(--app-border);
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
 }
 
-.participants__item:last-child {
-  border-bottom: none;
+.participants__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .participants__name {
-  min-width: 0;
+  font-weight: 600;
+}
+
+.participants__telegram {
+  color: var(--p-primary-700);
+  font-size: 0.875rem;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.participants__telegram:hover {
+  text-decoration: underline;
 }
 </style>
