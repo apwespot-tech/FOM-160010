@@ -1,4 +1,5 @@
 import os
+import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,11 +10,12 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import delete, text
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.main import create_app
+from app.models import Role, UserRole
 
 API_DIR = Path(__file__).resolve().parents[1]
 ADMIN_PHONE = "+79990000001"
@@ -79,7 +81,11 @@ def app(settings: Settings, clock: FakeClock) -> Iterator[FastAPI]:
     yield application
     with application.state.engine.begin() as conn:
         conn.execute(
-            text("TRUNCATE users, user_roles, auth_codes, refresh_tokens RESTART IDENTITY CASCADE")
+            text(
+                # categories не очищаем: справочник заполнен миграцией
+                "TRUNCATE event_participants, events, users, user_roles, auth_codes, "
+                "refresh_tokens RESTART IDENTITY CASCADE"
+            )
         )
     application.state.engine.dispose()
 
@@ -129,3 +135,37 @@ def register(
     )
     assert response.status_code == 200, response.text
     return {**tokens, "id": response.json()["id"]}
+
+
+def event_payload(**overrides: Any) -> dict[str, Any]:
+    """Корректное мероприятие на завтра; поля можно переопределить."""
+    payload: dict[str, Any] = {
+        "title": "Настолки в антикафе",
+        "description": "Играем в «Каркассон» и «Кодовые имена»",
+        "place": "Антикафе «Циферблат»",
+        "starts_at": (START + timedelta(days=1)).isoformat(),
+        "category_id": 1,
+        "max_participants": 5,
+        "min_age": 0,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def create_event(client: TestClient, user: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    response = client.post(
+        "/api/events", json=event_payload(**overrides), headers=auth_header(user)
+    )
+    assert response.status_code == 201, response.text
+    event: dict[str, Any] = response.json()
+    return event
+
+
+def join(client: TestClient, user: dict[str, Any], event_id: str) -> Any:
+    return client.post(f"/api/events/{event_id}/join", headers=auth_header(user))
+
+
+def set_roles(db: Session, user_id: str, roles: list[Role]) -> None:
+    db.execute(delete(UserRole).where(UserRole.user_id == uuid.UUID(user_id)))
+    db.add_all(UserRole(user_id=uuid.UUID(user_id), role=role) for role in roles)
+    db.commit()

@@ -7,9 +7,11 @@ import jwt
 import pytest
 from pydantic import ValidationError
 
+from app.ages import calculate_age
 from app.config import Settings
 from app.phones import normalize_phone
-from app.schemas.profile import AdminProfileUpdate, ProfileUpdate, calculate_age
+from app.schemas.event import EventCreate, EventUpdate
+from app.schemas.profile import AdminProfileUpdate, ProfileUpdate
 from app.security import (
     create_access_token,
     decode_access_token,
@@ -148,3 +150,69 @@ def test_admin_update_accepts_phone_but_not_roles() -> None:
         AdminProfileUpdate.model_validate({"phone": None})
     with pytest.raises(ValidationError):
         AdminProfileUpdate.model_validate({"phone": "12ab"})
+
+
+# --- схемы мероприятия ---
+
+
+def _event_fields(**overrides: object) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "title": "  Прогулка  ",
+        "description": "По набережной",
+        "place": "Парк",
+        "starts_at": "2026-11-01T19:00:00+03:00",
+        "category_id": 2,
+        "max_participants": 5,
+        "min_age": 0,
+    }
+    fields.update(overrides)
+    return fields
+
+
+def test_event_create_strips_strings() -> None:
+    event = EventCreate.model_validate(_event_fields())
+    assert event.title == "Прогулка"
+    assert event.duration_minutes is None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"title": "   "},
+        {"title": "x" * 101},
+        {"description": "x" * 2001},
+        {"place": ""},
+        {"starts_at": "2026-11-01T19:00:00"},
+        {"duration_minutes": 0},
+        {"duration_minutes": 1441},
+        {"max_participants": 1},
+        {"max_participants": 101},
+        {"min_age": 12},
+        {"organizer_id": str(uuid.uuid4())},
+    ],
+)
+def test_event_create_rejects_invalid(overrides: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        EventCreate.model_validate(_event_fields(**overrides))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"max_participants": 2},
+        {"max_participants": 100},
+        {"min_age": 18},
+        {"duration_minutes": 1440},
+    ],
+)
+def test_event_create_accepts_bounds(overrides: dict[str, object]) -> None:
+    EventCreate.model_validate(_event_fields(**overrides))
+
+
+def test_event_update_allows_clearing_only_duration() -> None:
+    update = EventUpdate.model_validate({"duration_minutes": None})
+    assert update.model_fields_set == {"duration_minutes"}
+    with pytest.raises(ValidationError):
+        EventUpdate.model_validate({"title": None})
+    with pytest.raises(ValidationError):
+        EventUpdate.model_validate({"id": str(uuid.uuid4())})

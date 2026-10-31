@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import RefreshToken, Role, User, UserRole
+from app.models import Event, EventParticipant, RefreshToken, Role, User, UserRole
 
 NOW = datetime(2026, 10, 31, tzinfo=UTC)
 
@@ -53,3 +53,70 @@ def test_user_delete_cascades_roles_and_tokens(db: Session) -> None:
 
     assert db.scalar(select(func.count()).select_from(UserRole)) == 0
     assert db.scalar(select(func.count()).select_from(RefreshToken)) == 0
+
+
+# --- мероприятия ---
+
+
+def _event(organizer_id: uuid.UUID, **overrides: object) -> Event:
+    fields: dict[str, object] = {
+        "organizer_id": organizer_id,
+        "category_id": 1,
+        "title": "t",
+        "description": "d",
+        "place": "p",
+        "starts_at": NOW,
+        "max_participants": 5,
+        "min_age": 0,
+    }
+    fields.update(overrides)
+    return Event(**fields)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"max_participants": 1},
+        {"max_participants": 101},
+        {"min_age": 12},
+        {"duration_minutes": 0},
+        {"duration_minutes": 1441},
+    ],
+)
+def test_event_check_constraints(db: Session, overrides: dict[str, object]) -> None:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    db.add(_event(user.id, **overrides))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_participant_is_unique_per_event(db: Session) -> None:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    event = _event(user.id)
+    db.add(event)
+    db.flush()
+    db.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=NOW))
+    db.commit()
+    db.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=NOW))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_event_delete_cascades_participants(db: Session) -> None:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    event = _event(user.id)
+    db.add(event)
+    db.flush()
+    db.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=NOW))
+    db.commit()
+
+    db.execute(delete(Event).where(Event.id == event.id))
+    db.commit()
+
+    assert db.scalar(select(func.count()).select_from(EventParticipant)) == 0

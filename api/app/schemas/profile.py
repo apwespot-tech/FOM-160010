@@ -4,6 +4,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, EmailStr, HttpUrl, StringConstraints, model_validator
 
+from app.ages import calculate_age
 from app.models import Role, User
 from app.phones import Phone
 
@@ -11,11 +12,6 @@ Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Telegram = Annotated[str, StringConstraints(pattern=r"^@[A-Za-z0-9_]{5,32}$")]
 
 REQUIRED_FIELDS = ("name", "birth_date")
-
-
-def calculate_age(birth_date: date, today: date) -> int:
-    had_birthday = (today.month, today.day) >= (birth_date.month, birth_date.day)
-    return today.year - birth_date.year - (0 if had_birthday else 1)
 
 
 class ProfileOut(BaseModel):

@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from typing import Annotated
 
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.errors import AppError, forbidden, unauthorized
-from app.models import User
+from app.models import Role, User
 from app.security import decode_access_token
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -74,3 +74,18 @@ def admin_user(user: CompletedUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(admin_user)]
+
+
+def require_role(role: Role) -> Callable[[User], User]:
+    """Зависимость: заполненный профиль и роль role, иначе 403."""
+
+    def dependency(user: CompletedUser) -> User:
+        if role not in user.roles:
+            raise forbidden()
+        return user
+
+    return dependency
+
+
+OrganizerUser = Annotated[User, Depends(require_role(Role.ORGANIZER))]
+ParticipantUser = Annotated[User, Depends(require_role(Role.PARTICIPANT))]
