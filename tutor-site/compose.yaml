@@ -1,0 +1,14 @@
+name: tutor-site
+
+services:
+  web:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./web
+          target: /usr/share/nginx/html
