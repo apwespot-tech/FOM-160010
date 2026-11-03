@@ -46,3 +46,7 @@ web/dist/
 
 # Logs
 *.log
+
+# Virtual environment
+venv/
+.venv/
