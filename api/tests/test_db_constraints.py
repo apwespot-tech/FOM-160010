@@ -6,7 +6,16 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Event, EventParticipant, RefreshToken, Role, User, UserRole
+from app.models import (
+    Event,
+    EventParticipant,
+    EventPhoto,
+    EventPhotoData,
+    RefreshToken,
+    Role,
+    User,
+    UserRole,
+)
 
 NOW = datetime(2026, 10, 31, tzinfo=UTC)
 
@@ -120,3 +129,60 @@ def test_event_delete_cascades_participants(db: Session) -> None:
     db.commit()
 
     assert db.scalar(select(func.count()).select_from(EventParticipant)) == 0
+
+
+# --- фото мероприятий ---
+
+
+def _event_with_owner(db: Session) -> Event:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    event = _event(user.id)
+    db.add(event)
+    db.flush()
+    return event
+
+
+def _photo(event_id: uuid.UUID, **overrides: object) -> EventPhoto:
+    fields: dict[str, object] = {
+        "event_id": event_id,
+        "position": 0,
+        "content_type": "image/jpeg",
+        "size_bytes": 3,
+        "created_at": NOW,
+    }
+    fields.update(overrides)
+    return EventPhoto(**fields)
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"position": 10}, {"position": -1}, {"content_type": "image/gif"}]
+)
+def test_event_photo_check_constraints(db: Session, overrides: dict[str, object]) -> None:
+    event = _event_with_owner(db)
+    db.add(_photo(event.id, **overrides))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_event_photo_position_is_unique_per_event(db: Session) -> None:
+    event = _event_with_owner(db)
+    db.add_all([_photo(event.id, position=3), _photo(event.id, position=3)])
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_event_delete_cascades_photos(db: Session) -> None:
+    event = _event_with_owner(db)
+    photo = _photo(event.id)
+    db.add(photo)
+    db.flush()
+    db.add(EventPhotoData(photo_id=photo.id, data=b"abc"))
+    db.commit()
+
+    db.execute(delete(Event).where(Event.id == event.id))
+    db.commit()
+
+    assert db.scalar(select(func.count()).select_from(EventPhoto)) == 0
+    assert db.scalar(select(func.count()).select_from(EventPhotoData)) == 0

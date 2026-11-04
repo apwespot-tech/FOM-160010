@@ -91,6 +91,14 @@ class EventView:
     organizer_telegram: str | None
     participants_count: int
     is_joined: bool
+    # id фото по порядку; первое — основное
+    photo_ids: tuple[uuid.UUID, ...] = ()
+
+
+class PhotoRef(BaseModel):
+    """Ссылка на фото мероприятия; содержимое — по GET /events/{id}/photos/{photo_id}."""
+
+    id: uuid.UUID
 
 
 class EventOut(BaseModel):
@@ -105,6 +113,7 @@ class EventOut(BaseModel):
     max_participants: int
     min_age: int
     organizer: OrganizerOut
+    photos: list[PhotoRef]
     participants_count: int
     free_places: int
     is_full: bool
@@ -131,6 +140,7 @@ class EventOut(BaseModel):
                 photo_url=view.organizer_photo_url,
                 telegram=view.organizer_telegram,
             ),
+            photos=[PhotoRef(id=photo_id) for photo_id in view.photo_ids],
             participants_count=view.participants_count,
             free_places=free_places,
             is_full=free_places == 0,

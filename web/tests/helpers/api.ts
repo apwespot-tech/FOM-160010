@@ -44,7 +44,12 @@ export function mockApi(handlers: Record<string, MockHandler> = {}) {
     const path = (url.replace(/^\/api/, '').split('?')[0] ?? '').trim()
     const method = (init.method ?? 'GET').toUpperCase()
     const headers = { ...(init.headers as Record<string, string> | undefined) }
-    const body = typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined
+    const body =
+      typeof init.body === 'string'
+        ? (JSON.parse(init.body) as unknown)
+        : init.body instanceof FormData
+          ? init.body
+          : undefined
     const request = { method, path, url, body, headers }
     requests.push(request)
     const handler = handlers[`${method} ${path}`]
@@ -118,10 +123,24 @@ export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
     max_participants: 10,
     min_age: 0,
     organizer: { id: 'org-1', name: 'Борис Петров', photo_url: null, telegram: null },
+    photos: [],
     participants_count: 3,
     free_places: 7,
     is_full: false,
     is_joined: false,
     ...overrides,
   }
+}
+
+/** Ответ с картинкой (для GET фото). */
+export function blobResponse(type = 'image/jpeg', content = 'img'): Response {
+  // Строковое тело: Blob из jsdom несовместим с Response из Node, тип берётся из заголовка
+  return new Response(content, {
+    status: 200,
+    headers: { 'Content-Type': type },
+  })
+}
+
+export function photoFile(name = 'photo.jpg', type = 'image/jpeg', size = 1024): File {
+  return new File([new Uint8Array(size)], name, { type })
 }

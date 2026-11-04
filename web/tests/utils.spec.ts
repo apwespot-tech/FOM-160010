@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 
+import { ApiError } from '@/api/client'
 import { useCountdown } from '@/composables/useCountdown'
 import {
   dateRangeToParams,
@@ -24,6 +25,16 @@ import {
   initials,
   telegramUrl,
 } from '@/utils/format'
+import {
+  buildPhotoPayload,
+  draftKeyForFileError,
+  overflowMessage,
+  photoErrorMessage,
+  photosChanged,
+  savedDrafts,
+  validatePhotoFiles,
+  type PhotoDraft,
+} from '@/utils/photos'
 
 describe('даты', () => {
   const originalTz = process.env.TZ
@@ -174,5 +185,80 @@ describe('создание мероприятия и контакты (UTC+3)', 
     [0, 'свободных мест нет'],
   ])('formatFreePlaces(%i)', (free, text) => {
     expect(formatFreePlaces(free)).toBe(text)
+  })
+})
+
+describe('фото: проверка и тело запроса', () => {
+  const MB = 1024 * 1024
+  const file = (name: string, type = 'image/jpeg', size = 1000) =>
+    new File([new Uint8Array(size)], name, { type })
+
+  it('граница 2 МБ', () => {
+    const exact = file('exact.jpg', 'image/jpeg', 2 * MB)
+    const over = file('over.jpg', 'image/jpeg', 2 * MB + 1)
+
+    const result = validatePhotoFiles(0, [exact, over])
+
+    expect(result.accepted).toEqual([exact])
+    expect(result.rejected).toEqual([{ name: 'over.jpg', reason: 'Файл больше 2 МБ' }])
+  })
+
+  it('HEIC и GIF отклоняются', () => {
+    const result = validatePhotoFiles(0, [file('a.heic', 'image/heic'), file('b.gif', 'image/gif')])
+
+    expect(result.accepted).toEqual([])
+    expect(result.rejected.map((r) => r.reason)).toEqual([
+      'Поддерживаются JPEG, PNG и WebP',
+      'Поддерживаются JPEG, PNG и WebP',
+    ])
+  })
+
+  it('8 + 4 файла: добавляются первые 2', () => {
+    const files = [
+      file('1.jpg'),
+      file('2.png', 'image/png'),
+      file('3.webp', 'image/webp'),
+      file('4.jpg'),
+    ]
+
+    const result = validatePhotoFiles(8, files)
+
+    expect(result.accepted.map((f) => f.name)).toEqual(['1.jpg', '2.png'])
+    expect(result.overflow).toBe(2)
+    expect(overflowMessage(result.overflow)).toBe('Не больше 10 фото — 2 файла не добавлены')
+    expect(overflowMessage(1)).toBe('Не больше 10 фото — 1 файл не добавлен')
+  })
+
+  it('order ссылается на новые файлы по порядку', () => {
+    const beach = file('beach.jpg')
+    const map = file('map.png', 'image/png')
+    const drafts: PhotoDraft[] = [
+      { kind: 'new', key: 'n1', file: beach, previewUrl: 'blob:1' },
+      { kind: 'saved', key: 'saved:a1', id: 'a1' },
+      { kind: 'saved', key: 'saved:c3', id: 'c3' },
+      { kind: 'new', key: 'n2', file: map, previewUrl: 'blob:2' },
+    ]
+
+    expect(buildPhotoPayload(drafts)).toEqual({
+      order: [{ file: 0 }, { id: 'a1' }, { id: 'c3' }, { file: 1 }],
+      files: [beach, map],
+    })
+  })
+
+  it('изменения набора и ошибка конкретного файла', () => {
+    const saved = [{ id: 'a' }, { id: 'b' }]
+    const same = savedDrafts(saved)
+    const drafts: PhotoDraft[] = [
+      ...same,
+      { kind: 'new', key: 'n1', file: file('x.jpg'), previewUrl: 'blob:1' },
+      { kind: 'new', key: 'n2', file: file('y.jpg'), previewUrl: 'blob:2' },
+    ]
+
+    expect(photosChanged(same, saved)).toBe(false)
+    expect(photosChanged([...same].reverse(), saved)).toBe(true)
+    expect(photosChanged(drafts, saved)).toBe(true)
+    const error = new ApiError(422, 'photo_invalid', 'bad', { file: 1 })
+    expect(draftKeyForFileError(drafts, error)).toBe('n2')
+    expect(photoErrorMessage(error)).toBe('Поддерживаются JPEG, PNG и WebP')
   })
 })

@@ -4,12 +4,13 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import ColumnElement, Row, ScalarSelect, Select, delete, exists, func, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ages import calculate_age
 from app.errors import AppError, forbidden, not_found
-from app.models import Category, Event, EventParticipant, User
+from app.models import Category, Event, EventParticipant, EventPhoto, User
 from app.schemas.event import EventCreate, EventUpdate, EventView, ParticipantOut
 
 
@@ -38,13 +39,23 @@ def _participants_count() -> ScalarSelect[int]:
     )
 
 
-ViewRow = Row[Event, str, str | None, str | None, str | None, int, bool]
+def _photo_ids() -> ScalarSelect[list[uuid.UUID] | None]:
+    """id фото мероприятия по порядку (NULL, если фото нет); байты не читаются."""
+    return (
+        select(func.array_agg(aggregate_order_by(EventPhoto.id, EventPhoto.position.asc())))
+        .where(EventPhoto.event_id == Event.id)
+        .correlate(Event)
+        .scalar_subquery()
+    )
+
+
+ViewRow = Row[Event, str, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]
 
 
 def _view_query(
     viewer_id: uuid.UUID,
-) -> Select[Event, str, str | None, str | None, str | None, int, bool]:
-    """Мероприятие с категорией, организатором, числом участников и признаком записи."""
+) -> Select[Event, str, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]:
+    """Мероприятие с категорией, организатором, числом участников, записью и фото."""
     participants_count = _participants_count()
     is_joined = (
         exists()
@@ -60,6 +71,7 @@ def _view_query(
             User.telegram,
             participants_count,
             is_joined,
+            _photo_ids(),
         )
         .join(Category, Category.id == Event.category_id)
         .join(User, User.id == Event.organizer_id)
@@ -67,7 +79,7 @@ def _view_query(
 
 
 def _to_view(row: ViewRow, viewer: User) -> EventView:
-    event, category_name, name, photo_url, telegram, participants_count, is_joined = row
+    event, category_name, name, photo_url, telegram, participants_count, is_joined, photos = row
     return EventView(
         event=event,
         category_name=category_name,
@@ -77,6 +89,7 @@ def _to_view(row: ViewRow, viewer: User) -> EventView:
         organizer_telegram=telegram if is_joined or viewer.is_admin else None,
         participants_count=participants_count,
         is_joined=is_joined,
+        photo_ids=tuple(photos or ()),
     )
 
 

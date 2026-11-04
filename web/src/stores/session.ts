@@ -5,6 +5,7 @@ import * as authApi from '@/api/auth'
 import { configureAuth } from '@/api/client'
 import * as profileApi from '@/api/profile'
 import type { Profile } from '@/api/profile'
+import { clearPhotoCache } from '@/composables/usePhotoUrl'
 
 export const REFRESH_TOKEN_KEY = 'ik.refreshToken'
 
@@ -43,6 +44,8 @@ export const useSessionStore = defineStore('session', () => {
     accessToken.value = null
     profile.value = null
     writeRefreshToken(null)
+    // Фото, загруженные с токеном прежнего пользователя, не должны остаться в памяти
+    clearPhotoCache()
   }
 
   async function refresh(): Promise<string | null> {

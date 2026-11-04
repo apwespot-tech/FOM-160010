@@ -5,12 +5,14 @@ export class ApiError extends Error {
   readonly retryAfter: number | undefined
   /** Поля, на которые указывает ошибка валидации (последний элемент `loc`). */
   readonly fields: string[]
+  /** Номер загруженного файла, к которому относится ошибка (`detail.file`). */
+  readonly file: number | undefined
 
   constructor(
     status: number,
     code: string,
     message: string,
-    options: { retryAfter?: number; fields?: string[] } = {},
+    options: { retryAfter?: number; fields?: string[]; file?: number } = {},
   ) {
     super(message)
     this.name = 'ApiError'
@@ -18,6 +20,7 @@ export class ApiError extends Error {
     this.code = code
     this.retryAfter = options.retryAfter
     this.fields = options.fields ?? []
+    this.file = options.file
   }
 }
 
@@ -53,23 +56,37 @@ export function refreshAccessToken(): Promise<string | null> {
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+  /** JSON-тело или `FormData` (multipart: границу проставляет браузер). */
   body?: unknown
   /** Добавить access-токен и обновить его при 401. */
   auth?: boolean
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await request(path, options, 'application/json')
+  if (response.status === 204) return undefined as T
+  return (await response.json()) as T
+}
+
+/** Файл (например, фото) с той же авторизацией и обновлением токена, что и у JSON-запросов. */
+export async function apiFetchBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const response = await request(path, options, '*/*')
+  return response.blob()
+}
+
+async function request(path: string, options: RequestOptions, accept: string): Promise<Response> {
   const { method = 'GET', body, auth = false } = options
+  const isForm = body instanceof FormData
 
   const send = async (token: string | null): Promise<Response> => {
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    if (body !== undefined) headers['Content-Type'] = 'application/json'
+    const headers: Record<string, string> = { Accept: accept }
+    if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
     if (token) headers.Authorization = `Bearer ${token}`
     try {
       return await fetch(`/api${path}`, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       })
     } catch {
       throw new ApiError(0, NETWORK_ERROR, 'Нет связи с сервером')
@@ -87,14 +104,15 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!response.ok) throw await toApiError(response)
-  if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  return response
 }
 
 interface ErrorDetail {
   code?: string
   message?: string
   retry_after?: number
+  /** Номер файла в запросе, к которому относится ошибка (фото). */
+  file?: number
 }
 
 interface ValidationIssue {
@@ -122,11 +140,12 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 
   if (detail && typeof detail === 'object') {
-    const { code, message, retry_after: retryAfter } = detail as ErrorDetail
+    const { code, message, retry_after: retryAfter, file } = detail as ErrorDetail
     const headerRetry = Number(response.headers.get('Retry-After'))
     return new ApiError(response.status, code ?? `http_${response.status}`, message ?? '', {
       retryAfter:
         retryAfter ?? (Number.isFinite(headerRetry) && headerRetry > 0 ? headerRetry : undefined),
+      file: typeof file === 'number' ? file : undefined,
     })
   }
 

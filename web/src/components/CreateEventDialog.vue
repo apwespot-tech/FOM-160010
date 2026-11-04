@@ -3,6 +3,8 @@
  * Окно «Новое мероприятие» по стандарту модальных окон (docs/rules.md):
  * на мобильной ширине — во весь экран, клик по фону закрывает только пустую форму,
  * кнопки в футере, основная справа. После создания — переход на страницу мероприятия.
+ * Если мероприятие создано, а фото не сохранились, окно остаётся открытым: повтор
+ * «Создать» отправляет только фото, а закрытие открывает созданное мероприятие.
  */
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -17,22 +19,35 @@ import { useIsMobile } from '@/utils/breakpoints'
 
 const router = useRouter()
 const isMobile = useIsMobile()
-const { visible, close } = useCreateEventDialog()
+const { visible, close, notifyCreated } = useCreateEventDialog()
 
 const controller = useEventForm({ getInitial: () => null })
 provideEventForm(controller)
-const { saving, requiredFilled, dirty, reset, submit } = controller
+const { saving, requiredFilled, dirty, created, reset, submit, releasePhotos } = controller
 
-// Каждое открытие — с чистой формой
+// Каждое открытие — с чистой формой; при закрытии освобождаются превью фото
 watch(visible, (open) => {
   if (open) reset()
+  else releasePhotos()
 })
 
 async function onSubmit() {
+  const wasCreated = created.value !== null
   const event = await submit()
-  if (!event) return
+  if (!event) {
+    // Мероприятие создано, фото — нет: показать его в списке за окном
+    if (!wasCreated && created.value) notifyCreated()
+    return
+  }
   close()
   await router.push(`/events/${event.id}`)
+}
+
+/** Закрытие без сохранения; если мероприятие уже создано — открыть его. */
+async function dismiss() {
+  const event = created.value
+  close()
+  if (event) await router.push(`/events/${event.id}`)
 }
 </script>
 
@@ -41,11 +56,11 @@ async function onSubmit() {
     :visible="visible"
     modal
     header="Новое мероприятие"
-    :dismissable-mask="!dirty"
+    :dismissable-mask="!dirty && !created"
     :draggable="false"
     :class="['create-event', { 'create-event--fullscreen': isMobile }]"
     data-testid="create-event-dialog"
-    @update:visible="!$event && close()"
+    @update:visible="!$event && dismiss()"
   >
     <form
       id="create-event-form"
@@ -73,7 +88,7 @@ async function onSubmit() {
           severity="secondary"
           outlined
           data-testid="create-event-cancel"
-          @click="close"
+          @click="dismiss"
         />
       </div>
     </template>

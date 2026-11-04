@@ -28,6 +28,7 @@ import {
   type Participant,
 } from '@/api/events'
 import EventFormFields from '@/components/EventFormFields.vue'
+import EventGallery from '@/components/EventGallery.vue'
 import EventParticipants from '@/components/EventParticipants.vue'
 import EventTile from '@/components/EventTile.vue'
 import OrganizerCard from '@/components/OrganizerCard.vue'
@@ -70,7 +71,8 @@ const joinBlockedReason = computed(() => {
 const when = computed(() => (event.value ? formatEventDay(event.value.starts_at) : null))
 const showFooter = computed(() => !!event.value && !isPast.value)
 
-const controller = useEventForm({ getInitial: () => event.value })
+// Если поля сохранились, а фото нет — окно и список уже показывают новые поля
+const controller = useEventForm({ getInitial: () => event.value, onPartialSave: applyEvent })
 provideEventForm(controller)
 const { saving, requiredFilled, reset, submit } = controller
 
@@ -289,6 +291,13 @@ function confirmRemoveParticipant(participant: Participant) {
 
       <!-- Просмотр -->
       <template v-else-if="event && when">
+        <EventGallery
+          v-if="event.photos.length"
+          :event-id="event.id"
+          :photos="event.photos"
+          :title="event.title"
+        />
+
         <div class="event-modal__tiles">
           <EventTile icon="pi-calendar" label="Когда">
             <span data-testid="event-starts-at">{{ when.day }}</span>

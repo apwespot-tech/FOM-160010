@@ -6,6 +6,7 @@
 import Message from 'primevue/message'
 
 import EventFieldInput from '@/components/EventFieldInput.vue'
+import EventPhotosField from '@/components/EventPhotosField.vue'
 import { injectEventForm } from '@/composables/eventFormContext'
 
 /** Префикс id полей: окна создания и редактирования могут быть в DOM одновременно */
@@ -48,6 +49,10 @@ const id = (name: string) => `${props.idPrefix}-${name}`
     <div class="app-field event-form__wide">
       <label :for="id('description')">Описание *</label>
       <EventFieldInput field="description" :input-id="id('description')" />
+    </div>
+    <div class="app-field event-form__wide">
+      <span class="event-form__label">Фото</span>
+      <EventPhotosField :input-id="id('photos')" />
     </div>
     <Message
       v-if="generalError"

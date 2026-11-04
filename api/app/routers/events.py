@@ -1,19 +1,23 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 from pydantic import AwareDatetime
 
 from app.deps import CompletedUser, NowDep, OrganizerUser, ParticipantUser, SessionDep
-from app.models.event import MAX_PARTICIPANTS
+from app.models.event import MAX_PARTICIPANTS, PHOTO_CONTENT_TYPES
 from app.schemas.event import EventCreate, EventOut, EventPage, EventUpdate, ParticipantOut
-from app.services import event_service
+from app.services import event_service, photo_service
 from app.services.event_service import EventPeriod, EventScope
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+PHOTO_HEADERS = {
+    "Cache-Control": "private, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+}
 
 
 @router.get("")
@@ -73,6 +77,35 @@ def delete_event(
 ) -> Response:
     event_service.delete_event(session, now, user, event_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{event_id}/photos/{photo_id}",
+    response_class=Response,
+    responses={200: {"content": {content_type: {} for content_type in PHOTO_CONTENT_TYPES}}},
+)
+def get_photo(
+    event_id: uuid.UUID, photo_id: uuid.UUID, user: CompletedUser, session: SessionDep
+) -> Response:
+    data, content_type = photo_service.get_photo(session, event_id, photo_id)
+    # Фото с данным id никогда не меняется: браузер хранит его бессрочно, общие кеши — нет
+    return Response(content=data, media_type=content_type, headers=PHOTO_HEADERS)
+
+
+@router.put("/{event_id}/photos")
+def replace_photos(
+    event_id: uuid.UUID,
+    user: CompletedUser,
+    session: SessionDep,
+    now: NowDep,
+    order: Annotated[str, Form(description='JSON: [{"id": "<uuid>"} | {"file": n}, ...]')],
+    files: Annotated[list[UploadFile] | None, File(description="Новые файлы фото")] = None,
+) -> EventOut:
+    """Заменяет набор фото итоговым упорядоченным списком; первое фото — основное."""
+    photo_service.replace_photos(
+        session, now, user, event_id, order, [upload.file for upload in files or []]
+    )
+    return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
 @router.post("/{event_id}/join")

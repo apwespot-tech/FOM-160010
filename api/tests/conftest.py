@@ -83,8 +83,8 @@ def app(settings: Settings, clock: FakeClock) -> Iterator[FastAPI]:
         conn.execute(
             text(
                 # categories не очищаем: справочник заполнен миграцией
-                "TRUNCATE event_participants, events, users, user_roles, auth_codes, "
-                "refresh_tokens RESTART IDENTITY CASCADE"
+                "TRUNCATE event_photo_data, event_photos, event_participants, events, users, "
+                "user_roles, auth_codes, refresh_tokens RESTART IDENTITY CASCADE"
             )
         )
     application.state.engine.dispose()

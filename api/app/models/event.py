@@ -8,8 +8,10 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
+    UniqueConstraint,
     func,
     text,
 )
@@ -21,6 +23,10 @@ MIN_AGE_VALUES = (0, 14, 16, 18)
 MIN_PARTICIPANTS = 2
 MAX_PARTICIPANTS = 100
 MAX_DURATION_MINUTES = 1440
+
+MAX_PHOTOS = 10
+MAX_PHOTO_BYTES = 2 * 1024 * 1024
+PHOTO_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp")
 
 
 class Category(Base):
@@ -80,3 +86,38 @@ class EventParticipant(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EventPhoto(Base):
+    """Фото мероприятия: метаданные и порядок. Байты — в EventPhotoData."""
+
+    __tablename__ = "event_photos"
+    __table_args__ = (
+        CheckConstraint(f"position BETWEEN 0 AND {MAX_PHOTOS - 1}", name="position_range"),
+        CheckConstraint(
+            f"content_type IN ({', '.join(repr(t) for t in PHOTO_CONTENT_TYPES)})",
+            name="content_type_values",
+        ),
+        # Отложенная уникальность: порядок переставляется в одной транзакции
+        UniqueConstraint("event_id", "position", deferrable=True, initially="DEFERRED"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()")
+    )
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(SmallInteger)
+    content_type: Mapped[str] = mapped_column(String(20))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class EventPhotoData(Base):
+    """Содержимое фото. Отдельная таблица, чтобы запросы мероприятий не читали байты."""
+
+    __tablename__ = "event_photo_data"
+
+    photo_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("event_photos.id", ondelete="CASCADE"), primary_key=True
+    )
+    data: Mapped[bytes] = mapped_column(LargeBinary)

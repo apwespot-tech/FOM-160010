@@ -10,7 +10,7 @@ import SelectButton from 'primevue/selectbutton'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import { RouterView } from 'vue-router'
 
 import type { EventPeriod } from '@/api/events'
@@ -24,7 +24,9 @@ const { state, params, activeFilters, update, resetFilters } = useEventListQuery
 const { items, total, loading, error, reload, loadMore, replaceItem, removeItem } =
   useEventList(params)
 provideEventListUpdates({ replaceItem, removeItem })
-const { open: openCreate } = useCreateEventDialog()
+const { open: openCreate, onEventCreated } = useCreateEventDialog()
+// Мероприятие создано, а окно создания ещё открыто (не сохранились фото) — показать его в списке
+onBeforeUnmount(onEventCreated(() => void reload()))
 
 const periodOptions: { value: EventPeriod; label: string }[] = [
   { value: 'upcoming', label: 'Предстоящие' },

@@ -5,12 +5,14 @@ import type { EventItem, Participant } from '@/api/events'
 import type { Profile } from '@/api/profile'
 
 import {
+  blobResponse,
   categories,
   completeProfile,
   errorResponse,
   eventItem,
   jsonResponse,
   mockApi,
+  photoFile,
   type MockHandler,
 } from './helpers/api'
 import { setViewportWidth } from './helpers/media'
@@ -471,5 +473,207 @@ describe('Прошедшее мероприятие', () => {
     expect(toasts()).toContain('Мероприятие уже началось')
     expect(exists('event-past')).toBe(true)
     expect(exists('join')).toBe(false)
+  })
+})
+
+describe('Галерея фото', () => {
+  const photos = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ id: `p${index + 1}` }))
+  const photoHandlers = (count: number): Record<string, MockHandler> =>
+    Object.fromEntries(
+      photos(count).map((photo) => [`GET /events/e1/photos/${photo.id}`, () => blobResponse()]),
+    )
+
+  it('без фото блока галереи нет', async () => {
+    await openEvent(eventItem())
+
+    expect(exists('event-gallery')).toBe(false)
+    expect(exists('event-starts-at')).toBe(true)
+  })
+
+  it('4 фото: основное и 3 миниатюры по порядку', async () => {
+    const { api } = await openEvent(eventItem({ photos: photos(4) }), photoHandlers(4))
+    await settle()
+
+    expect(exists('gallery-main')).toBe(true)
+    const thumbs = all('gallery-thumb')
+    expect(thumbs.map((thumb) => thumb.getAttribute('aria-label'))).toEqual([
+      'Открыть фото 2 из 4',
+      'Открыть фото 3 из 4',
+      'Открыть фото 4 из 4',
+    ])
+    expect(find('gallery-main')?.querySelector('img')?.getAttribute('src')).toMatch(/^blob:/)
+    // Фото запрашиваются с токеном
+    expect(api.calls('GET /events/e1/photos/p1')[0]?.headers.Authorization).toMatch(/^Bearer /)
+  })
+
+  it('одно фото — без ряда миниатюр', async () => {
+    await openEvent(eventItem({ photos: photos(1) }), photoHandlers(1))
+
+    expect(exists('gallery-main')).toBe(true)
+    expect(exists('gallery-thumbs')).toBe(false)
+  })
+
+  it('просмотр: «3 из 5», вперёд — 4-е, Esc закрывает только просмотр', async () => {
+    await openEvent(eventItem({ photos: photos(5) }), photoHandlers(5))
+
+    await click('gallery-main')
+    expect(text('photo-viewer-counter')).toBe('1 из 5')
+    await click('photo-viewer-close')
+    expect(exists('photo-viewer')).toBe(false)
+
+    all('gallery-thumb')[1]?.click()
+    await settle()
+    expect(text('photo-viewer-counter')).toBe('3 из 5')
+
+    await click('photo-viewer-next')
+    expect(text('photo-viewer-counter')).toBe('4 из 5')
+
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await settle()
+    expect(exists('photo-viewer')).toBe(false)
+    expect(exists('event-modal')).toBe(true)
+  })
+
+  it('повторное открытие окна не запрашивает фото снова', async () => {
+    const { api, router } = await openEvent(eventItem({ photos: photos(2) }), photoHandlers(2))
+    await settle()
+    expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(1)
+
+    await router.push('/')
+    await settle()
+    await router.push('/events/e1')
+    await settle()
+
+    expect(exists('gallery-main')).toBe(true)
+    expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(1)
+    expect(api.calls('GET /events/e1/photos/p2')).toHaveLength(1)
+  })
+
+  it('ошибка загрузки фото — иконка без текста ошибки', async () => {
+    await openEvent(eventItem({ photos: photos(1) }), {
+      'GET /events/e1/photos/p1': () => errorResponse(500, 'oops'),
+    })
+    await settle()
+
+    expect(exists('event-photo-failed')).toBe(true)
+    expect(text('event-gallery')).toBe('')
+  })
+})
+
+describe('Фото в режиме редактирования', () => {
+  const withPhotos = (ids: string[], overrides: Partial<EventItem> = {}) =>
+    mine({ photos: ids.map((id) => ({ id })), ...overrides })
+  const photoHandlers = (ids: string[]): Record<string, MockHandler> =>
+    Object.fromEntries(ids.map((id) => [`GET /events/e1/photos/${id}`, () => blobResponse()]))
+
+  function tiles(): HTMLElement[] {
+    return all('photo-tile')
+  }
+
+  function setPlace(value: string): void {
+    const place = bodyGet('[data-testid="field-place"]') as HTMLInputElement
+    place.value = value
+    place.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('форма показывает текущие фото', async () => {
+    await openEvent(withPhotos(['p1', 'p2']), photoHandlers(['p1', 'p2']))
+
+    await click('event-edit')
+
+    expect(exists('event-gallery')).toBe(false)
+    expect(tiles()).toHaveLength(2)
+    expect(tiles()[0]?.textContent).toContain('Основное')
+  })
+
+  it('изменение места не отправляет фото', async () => {
+    const { api } = await openEvent(withPhotos(['p1']), {
+      ...photoHandlers(['p1']),
+      'PATCH /events/e1': () => jsonResponse(200, withPhotos(['p1'], { place: 'Библиотека' })),
+    })
+
+    await click('event-edit')
+    setPlace('Библиотека')
+    await settle()
+    await click('event-save')
+
+    expect(api.calls('PATCH /events/e1')).toHaveLength(1)
+    expect(api.calls('PUT /events/e1/photos')).toHaveLength(0)
+  })
+
+  it('только фото: без PATCH, PUT с оставшимися, галерея обновлена', async () => {
+    const { api } = await openEvent(withPhotos(['p1', 'p2']), {
+      ...photoHandlers(['p1', 'p2']),
+      'PUT /events/e1/photos': () => jsonResponse(200, withPhotos(['p2'])),
+    })
+
+    await click('event-edit')
+    tiles()[0]?.querySelector<HTMLElement>('[data-testid="photo-remove"]')?.click()
+    await settle()
+    await click('event-save')
+
+    expect(api.calls('PATCH /events/e1')).toHaveLength(0)
+    const form = api.calls('PUT /events/e1/photos')[0]?.body as FormData
+    expect(JSON.parse(String(form.get('order')))).toEqual([{ id: 'p2' }])
+    expect(form.getAll('files')).toHaveLength(0)
+    expect(exists('event-edit-form')).toBe(false)
+    expect(exists('gallery-main')).toBe(true)
+    expect(exists('gallery-thumbs')).toBe(false)
+  })
+
+  it('поля и фото: ошибка PUT оставляет форму, повтор не шлёт PATCH', async () => {
+    let failPhotos = true
+    const { api } = await openEvent(withPhotos(['p1']), {
+      ...photoHandlers(['p1']),
+      'PATCH /events/e1': () =>
+        jsonResponse(200, withPhotos(['p1'], { place: 'Библиотека', free_places: 3 })),
+      'PUT /events/e1/photos': () =>
+        failPhotos
+          ? errorResponse(503, 'unavailable')
+          : jsonResponse(200, withPhotos(['p1', 'p9'], { place: 'Библиотека' })),
+      'GET /events/e1/photos/p9': () => blobResponse(),
+    })
+
+    await click('event-edit')
+    setPlace('Библиотека')
+    const input = bodyGet('[data-testid="photo-input"]') as HTMLInputElement
+    Object.defineProperty(input, 'files', { value: [photoFile('new.jpg')], configurable: true })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    await click('event-save')
+
+    expect(api.calls('PATCH /events/e1')).toHaveLength(1)
+    expect(api.calls('PUT /events/e1/photos')).toHaveLength(1)
+    expect(exists('event-edit-form')).toBe(true)
+    expect(text('photo-error')).toBe('Не удалось сохранить фото. Попробуйте ещё раз')
+    // Место уже сохранено — карточка списка обновлена
+    expect(cardPlaces()).toBe('Осталось 3 из 10 мест')
+
+    failPhotos = false
+    await click('event-save')
+
+    expect(api.calls('PATCH /events/e1')).toHaveLength(1)
+    expect(api.calls('PUT /events/e1/photos')).toHaveLength(2)
+    expect(exists('event-edit-form')).toBe(false)
+    expect(all('gallery-thumb')).toHaveLength(1)
+  })
+
+  it('«Отмена» откатывает удаление и добавление фото без запросов', async () => {
+    const { api } = await openEvent(withPhotos(['p1', 'p2']), photoHandlers(['p1', 'p2']))
+
+    await click('event-edit')
+    tiles()[0]?.querySelector<HTMLElement>('[data-testid="photo-remove"]')?.click()
+    const input = bodyGet('[data-testid="photo-input"]') as HTMLInputElement
+    Object.defineProperty(input, 'files', { value: [photoFile('x.jpg')], configurable: true })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    await click('event-cancel')
+
+    expect(api.calls('PUT /events/e1/photos')).toHaveLength(0)
+    expect(all('gallery-thumb')).toHaveLength(1)
+
+    await click('event-edit')
+    expect(tiles()).toHaveLength(2)
   })
 })

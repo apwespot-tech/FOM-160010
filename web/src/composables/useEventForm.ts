@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { ApiError, NETWORK_ERROR } from '@/api/client'
 import {
   createEvent,
+  replaceEventPhotos,
   updateEvent,
   type EventCreate,
   type EventItem,
@@ -10,6 +11,17 @@ import {
   type MinAge,
 } from '@/api/events'
 import { toOffsetIso } from '@/utils/dates'
+import {
+  buildPhotoPayload,
+  draftKeyForFileError,
+  overflowMessage,
+  photoErrorMessage,
+  photosChanged,
+  savedDrafts,
+  validatePhotoFiles,
+  type PhotoDraft,
+  type RejectedFile,
+} from '@/utils/photos'
 
 export type EventField =
   | 'title'
@@ -75,6 +87,11 @@ export function eventErrorMessage(error: unknown, minAge?: number): string {
 export interface EventFormOptions {
   /** Мероприятие для редактирования; null — создание. */
   getInitial: () => EventItem | null
+  /**
+   * Сервер принял поля, а фото — нет: окно показывает новые данные,
+   * а повторное сохранение не отправляет поля ещё раз.
+   */
+  onPartialSave?: (event: EventItem) => void
   /** Текущее время (подменяется в тестах). */
   now?: () => Date
 }
@@ -84,7 +101,11 @@ export interface EventFormOptions {
  * отправка только изменённых полей, раскладка серверных ошибок по полям.
  * Используется окном создания и страницей мероприятия в режиме редактирования.
  */
-export function useEventForm({ getInitial, now = () => new Date() }: EventFormOptions) {
+export function useEventForm({
+  getInitial,
+  onPartialSave,
+  now = () => new Date(),
+}: EventFormOptions) {
   const form = reactive({
     title: '',
     categoryId: null as number | null,
@@ -100,6 +121,77 @@ export function useEventForm({ getInitial, now = () => new Date() }: EventFormOp
   const generalError = ref<string | null>(null)
   const saving = ref(false)
   const submitted = ref(false)
+
+  // Фото: изменения живут только в форме до «Создать»/«Сохранить»
+  const photos = ref<PhotoDraft[]>([])
+  const rejectedPhotos = ref<RejectedFile[]>([])
+  const photoNotice = ref<string | null>(null)
+  const photoError = ref<string | null>(null)
+  const photoErrorKey = ref<string | null>(null)
+  /** Мероприятие уже создано, но фото не сохранились: повтор отправит только фото. */
+  const created = ref<EventItem | null>(null)
+  let draftCounter = 0
+
+  /** Мероприятие, к которому относятся сохранённые фото формы. */
+  const photoEventId = computed(() => created.value?.id ?? getInitial()?.id ?? null)
+
+  function revokePreviews(drafts: readonly PhotoDraft[]): void {
+    for (const draft of drafts) if (draft.kind === 'new') URL.revokeObjectURL(draft.previewUrl)
+  }
+
+  function setPhotos(next: PhotoDraft[]): void {
+    const kept = new Set(next.map((draft) => draft.key))
+    revokePreviews(photos.value.filter((draft) => !kept.has(draft.key)))
+    photos.value = next
+  }
+
+  function clearPhotoMessages(): void {
+    rejectedPhotos.value = []
+    photoNotice.value = null
+    photoError.value = null
+    photoErrorKey.value = null
+  }
+
+  function addPhotos(files: readonly File[]): void {
+    clearPhotoMessages()
+    const { accepted, rejected, overflow } = validatePhotoFiles(photos.value.length, files)
+    rejectedPhotos.value = rejected
+    photoNotice.value = overflow > 0 ? overflowMessage(overflow) : null
+    const added = accepted.map((file): PhotoDraft => ({
+      kind: 'new',
+      key: `new:${++draftCounter}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }))
+    photos.value = [...photos.value, ...added]
+  }
+
+  function removePhoto(key: string): void {
+    clearPhotoMessages()
+    setPhotos(photos.value.filter((draft) => draft.key !== key))
+  }
+
+  function movePhoto(key: string, delta: number): void {
+    const list = [...photos.value]
+    const from = list.findIndex((draft) => draft.key === key)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= list.length) return
+    const [draft] = list.splice(from, 1)
+    if (draft) list.splice(to, 0, draft)
+    photos.value = list
+  }
+
+  /** Сделать основным: на первое место, остальные сохраняют взаимный порядок. */
+  function makeMainPhoto(key: string): void {
+    const draft = photos.value.find((item) => item.key === key)
+    if (!draft) return
+    photos.value = [draft, ...photos.value.filter((item) => item.key !== key)]
+  }
+
+  const photosDirty = computed(() => {
+    const base = created.value ?? getInitial()
+    return base ? photosChanged(photos.value, base.photos) : photos.value.length > 0
+  })
 
   /** Минимум участников: при редактировании — не меньше уже записавшихся. */
   const minParticipants = computed(() =>
@@ -122,6 +214,9 @@ export function useEventForm({ getInitial, now = () => new Date() }: EventFormOp
     }
     generalError.value = null
     submitted.value = false
+    created.value = null
+    setPhotos(savedDrafts(initial?.photos ?? []))
+    clearPhotoMessages()
   }
 
   function textError(value: string, max: number, empty: string): string | null {
@@ -231,7 +326,8 @@ export function useEventForm({ getInitial, now = () => new Date() }: EventFormOp
       form.startsAt !== null ||
       form.durationMinutes !== null ||
       form.maxParticipants !== DEFAULT_MAX_PARTICIPANTS ||
-      form.minAge !== 0,
+      form.minAge !== 0 ||
+      photos.value.length > 0,
   )
 
   function applyServerError(error: unknown): void {
@@ -257,26 +353,60 @@ export function useEventForm({ getInitial, now = () => new Date() }: EventFormOp
     }
   }
 
+  /** Отправляет набор фото; при ошибке — сообщение у блока фото и отметка файла. */
+  async function savePhotos(event: EventItem): Promise<EventItem | null> {
+    const { order, files } = buildPhotoPayload(photos.value)
+    try {
+      const saved = await replaceEventPhotos(event.id, order, files)
+      setPhotos(savedDrafts(saved.photos))
+      return saved
+    } catch (error) {
+      photoError.value = photoErrorMessage(error)
+      photoErrorKey.value = draftKeyForFileError(photos.value, error)
+      return null
+    }
+  }
+
   /**
-   * Проверяет и сохраняет форму. Возвращает созданное или изменённое мероприятие
-   * (исходное — без запроса, если ничего не изменилось) или null при ошибке.
+   * Проверяет и сохраняет форму: поля (создание или только изменённые), затем фото,
+   * если они изменились. Возвращает итоговое мероприятие (исходное — без запросов,
+   * если ничего не изменилось) или null при ошибке.
    */
   async function submit(): Promise<EventItem | null> {
     submitted.value = true
     generalError.value = null
+    photoError.value = null
+    photoErrorKey.value = null
     if (!requiredFilled.value || FIELDS.some((field) => validate(field) !== null)) return null
 
-    const initial = getInitial()
+    const initial = created.value ?? getInitial()
     const patch = initial ? buildPatch(initial) : null
-    if (initial && patch && Object.keys(patch).length === 0) return initial
+    const fieldsChanged = !initial || (patch !== null && Object.keys(patch).length > 0)
+    if (initial && !fieldsChanged && !photosDirty.value) return initial
 
     saving.value = true
     try {
-      return initial && patch
-        ? await updateEvent(initial.id, patch)
-        : await createEvent(toPayload())
-    } catch (error) {
-      applyServerError(error)
+      let event: EventItem
+      try {
+        if (!initial) event = await createEvent(toPayload())
+        else if (patch && fieldsChanged) event = await updateEvent(initial.id, patch)
+        else event = initial
+      } catch (error) {
+        applyServerError(error)
+        return null
+      }
+
+      const needPhotos = initial ? photosDirty.value : photos.value.length > 0
+      if (!needPhotos) return event
+
+      const saved = await savePhotos(event)
+      if (saved) {
+        created.value = null
+        return saved
+      }
+      // Поля уже сохранены: дальше форма сравнивает с новыми данными
+      if (!getInitial()) created.value = event
+      if (event !== initial) onPartialSave?.(event)
       return null
     } finally {
       saving.value = false
@@ -296,5 +426,18 @@ export function useEventForm({ getInitial, now = () => new Date() }: EventFormOp
     touch,
     reset,
     submit,
+    photos,
+    photoEventId,
+    rejectedPhotos,
+    photoNotice,
+    photoError,
+    photoErrorKey,
+    created,
+    addPhotos,
+    removePhoto,
+    movePhoto,
+    makeMainPhoto,
+    /** Освободить превью новых файлов (при закрытии формы). */
+    releasePhotos: () => setPhotos([]),
   }
 }

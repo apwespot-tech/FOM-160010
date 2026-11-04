@@ -6,12 +6,14 @@ import type { EventItem } from '@/api/events'
 import { useEventForm } from '@/composables/useEventForm'
 
 import {
+  blobResponse,
   categories,
   completeProfile,
   errorResponse,
   eventItem,
   jsonResponse,
   mockApi,
+  photoFile,
 } from './helpers/api'
 import { setViewportWidth } from './helpers/media'
 import { bodyGet, renderApp, settle, waitForPath, withStoredSession } from './helpers/render'
@@ -304,5 +306,210 @@ describe('Создание мероприятия', () => {
     await settle()
 
     expect((bodyGet('[data-testid="field-title"]') as HTMLInputElement).value).toBe('')
+  })
+})
+
+// --- блок фото ---
+
+async function selectFiles(files: File[]): Promise<void> {
+  const input = bodyGet('[data-testid="photo-input"]') as HTMLInputElement
+  Object.defineProperty(input, 'files', { value: files, configurable: true })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  await settle()
+}
+
+function tiles(): HTMLElement[] {
+  return [...document.body.querySelectorAll<HTMLElement>('[data-testid="photo-tile"]')]
+}
+
+/** Превью плиток по порядку: у каждого нового файла своя локальная ссылка. */
+function tileSources(): string[] {
+  return tiles().map((tile) => tile.querySelector('img')?.getAttribute('src') ?? '')
+}
+
+function tileButton(index: number, testId: string): HTMLElement | null {
+  return tiles()[index]?.querySelector<HTMLElement>(`[data-testid="${testId}"]`) ?? null
+}
+
+async function fillCreateForm(): Promise<void> {
+  setInput('[data-testid="field-title"]', 'Футбол в парке')
+  await chooseCategory('Спорт')
+  setInput('[data-testid="field-starts-at-native"]', '2026-11-01T19:00')
+  setInput('[data-testid="field-place"]', 'Парк Горького')
+  setInput('[data-testid="field-description"]', 'Играем 5 на 5')
+  await settle()
+}
+
+/** Ответ POST с теми же значениями, что ввела fillCreateForm (как вернул бы сервер). */
+function createdFromForm(overrides: Partial<EventItem> = {}): EventItem {
+  return eventItem({
+    id: 'new-1',
+    title: 'Футбол в парке',
+    category: { id: 3, name: 'Спорт' },
+    starts_at: '2026-11-01T16:00:00Z',
+    duration_minutes: null,
+    place: 'Парк Горького',
+    description: 'Играем 5 на 5',
+    max_participants: 10,
+    min_age: 0,
+    ...overrides,
+  })
+}
+
+function submitCreate(): HTMLButtonElement {
+  return bodyGet('[data-testid="create-event-submit"]') as HTMLButtonElement
+}
+
+describe('Блок фото в форме', () => {
+  it('добавление 3 к 2 даёт 5 плиток по порядку, первое — основное', async () => {
+    await openCreateDialog()
+
+    await selectFiles([photoFile('1.jpg'), photoFile('2.jpg')])
+    const firstTwo = tileSources()
+    await selectFiles([
+      photoFile('3.jpg'),
+      photoFile('4.png', 'image/png'),
+      photoFile('5.webp', 'image/webp'),
+    ])
+
+    expect(tiles()).toHaveLength(5)
+    expect(tileSources().slice(0, 2)).toEqual(firstTwo)
+    expect(new Set(tileSources()).size).toBe(5)
+    expect(tileButton(0, 'photo-main-mark')?.textContent?.trim()).toBe('Основное')
+    expect(tileButton(1, 'photo-main-mark')).toBeNull()
+  })
+
+  it('«Сделать основным» у третьей: она первая, остальные в прежнем порядке', async () => {
+    await openCreateDialog()
+    await selectFiles([photoFile('a.jpg'), photoFile('b.jpg'), photoFile('c.jpg')])
+    const [a, b, c] = tileSources()
+
+    tileButton(2, 'photo-make-main')?.click()
+    await settle()
+    expect(tileSources()).toEqual([c, a, b])
+
+    tileButton(2, 'photo-left')?.click()
+    await settle()
+    expect(tileSources()).toEqual([c, b, a])
+
+    tileButton(0, 'photo-remove')?.click()
+    await settle()
+    expect(tileSources()).toEqual([b, a])
+  })
+
+  it('10 фото: «Добавить фото» неактивна и «Не больше 10 фото»', async () => {
+    await openCreateDialog()
+
+    await selectFiles(Array.from({ length: 10 }, (_, i) => photoFile(`${i}.jpg`)))
+
+    expect((bodyGet('[data-testid="photo-add"]') as HTMLButtonElement).disabled).toBe(true)
+    expect(bodyGet('[data-testid="photo-limit"]').textContent?.trim()).toBe('Не больше 10 фото')
+  })
+
+  it('отклонённые файлы — с причинами, подходящие добавляются', async () => {
+    await openCreateDialog()
+
+    await selectFiles([
+      photoFile('big.jpg', 'image/jpeg', 2 * 1024 * 1024 + 1),
+      photoFile('live.heic', 'image/heic'),
+      photoFile('ok.jpg'),
+    ])
+
+    expect(tiles()).toHaveLength(1)
+    const rejected = bodyGet('[data-testid="photo-rejected"]').textContent ?? ''
+    expect(rejected).toContain('«big.jpg» — Файл больше 2 МБ')
+    expect(rejected).toContain('«live.heic» — Поддерживаются JPEG, PNG и WebP')
+  })
+
+  it('8 фото + 4 файла: добавлены 2, остальные — с пояснением', async () => {
+    await openCreateDialog()
+    await selectFiles(Array.from({ length: 8 }, (_, i) => photoFile(`${i}.jpg`)))
+
+    await selectFiles(Array.from({ length: 4 }, (_, i) => photoFile(`x${i}.jpg`)))
+
+    expect(tiles()).toHaveLength(10)
+    expect(bodyGet('[data-testid="photo-rejected"]').textContent).toContain(
+      'Не больше 10 фото — 2 файла не добавлены',
+    )
+  })
+})
+
+describe('Создание мероприятия с фото', () => {
+  it('POST, затем PUT с файлами в выбранном порядке, затем мероприятие', async () => {
+    const { api, router } = await openCreateDialog()
+    api.on('PUT /events/new-1/photos', () =>
+      jsonResponse(200, eventItem({ id: 'new-1', photos: [{ id: 'p1' }, { id: 'p2' }] })),
+    )
+    api.on('GET /events/new-1/photos/p1', () => blobResponse())
+    api.on('GET /events/new-1/photos/p2', () => blobResponse())
+    await fillCreateForm()
+    await selectFiles([photoFile('beach.jpg'), photoFile('map.png', 'image/png')])
+    tileButton(1, 'photo-make-main')?.click()
+    await settle()
+
+    submitCreate().click()
+    await settle()
+
+    const keys = api.requests.map((r) => `${r.method} ${r.path}`)
+    expect(keys.indexOf('POST /events')).toBeLessThan(keys.indexOf('PUT /events/new-1/photos'))
+    const put = api.calls('PUT /events/new-1/photos')[0]?.body as FormData
+    expect(JSON.parse(String(put.get('order')))).toEqual([{ file: 0 }, { file: 1 }])
+    expect((put.getAll('files') as File[]).map((f) => f.name)).toEqual(['map.png', 'beach.jpg'])
+    await waitForPath(router, '/events/new-1')
+    await vi.waitFor(() => expect(dialogOpen()).toBe(false))
+  })
+
+  it('фото не сохранились: окно открыто, повтор — только PUT', async () => {
+    const { api, router } = await openCreateDialog()
+    api.on('POST /events', () => jsonResponse(201, createdFromForm()))
+    let failPhotos = true
+    api.on('PUT /events/new-1/photos', () =>
+      failPhotos
+        ? errorResponse(422, 'photo_invalid', { file: 1 })
+        : jsonResponse(200, eventItem({ id: 'new-1', photos: [{ id: 'p1' }] })),
+    )
+    await fillCreateForm()
+    await selectFiles([photoFile('ok.jpg'), photoFile('broken.jpg')])
+    const listLoads = api.calls('GET /events').length
+
+    submitCreate().click()
+    await settle()
+
+    expect(dialogOpen()).toBe(true)
+    expect(api.calls('POST /events')).toHaveLength(1)
+    expect(bodyGet('[data-testid="photo-error"]').textContent).toContain(
+      'Поддерживаются JPEG, PNG и WebP',
+    )
+    expect(tiles()).toHaveLength(2)
+    expect(tiles()[1]?.className).toContain('photos-field__tile--error')
+    // Список за окном перезагружен: мероприятие уже создано
+    await vi.waitFor(() => expect(api.calls('GET /events').length).toBeGreaterThan(listLoads))
+
+    // Убираем плохой файл и создаём снова — второго POST нет
+    tileButton(1, 'photo-remove')?.click()
+    await settle()
+    failPhotos = false
+    submitCreate().click()
+    await settle()
+
+    expect(api.calls('POST /events')).toHaveLength(1)
+    expect(api.calls('PATCH /events/new-1')).toHaveLength(0)
+    expect(api.calls('PUT /events/new-1/photos')).toHaveLength(2)
+    await waitForPath(router, '/events/new-1')
+  })
+
+  it('фото не сохранились, окно закрыли — открывается созданное мероприятие', async () => {
+    const { api, router } = await openCreateDialog()
+    api.on('PUT /events/new-1/photos', () => errorResponse(500, 'oops'))
+    await fillCreateForm()
+    await selectFiles([photoFile('a.jpg')])
+
+    submitCreate().click()
+    await settle()
+    expect(dialogOpen()).toBe(true)
+
+    bodyGet('[data-testid="create-event-cancel"]').click()
+    await waitForPath(router, '/events/new-1')
+    await vi.waitFor(() => expect(dialogOpen()).toBe(false))
   })
 })

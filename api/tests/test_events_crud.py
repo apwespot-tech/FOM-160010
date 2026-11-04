@@ -61,6 +61,7 @@ def test_create_event(client: TestClient) -> None:
         "max_participants": 5,
         "min_age": 16,
         "organizer": {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
+        "photos": [],
         "participants_count": 1,
         "free_places": 4,
         "is_full": False,

@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiFetchBlob } from './client'
 
 export type MinAge = 0 | 14 | 16 | 18
 export const MIN_AGE_VALUES: readonly MinAge[] = [0, 14, 16, 18]
@@ -19,6 +19,10 @@ export interface PersonRef {
   telegram: string | null
 }
 
+export interface PhotoRef {
+  id: string
+}
+
 export interface EventItem {
   id: string
   title: string
@@ -31,6 +35,8 @@ export interface EventItem {
   max_participants: number
   min_age: MinAge
   organizer: PersonRef
+  /** Фото по порядку, первое — основное. Содержимое — отдельным запросом по `id`. */
+  photos: PhotoRef[]
   participants_count: number
   free_places: number
   is_full: boolean
@@ -120,4 +126,31 @@ export function listParticipants(id: string): Promise<Participant[]> {
 
 export function removeParticipant(id: string, userId: string): Promise<EventItem> {
   return apiFetch(`/events/${id}/participants/${userId}/remove`, { method: 'POST', auth: true })
+}
+
+/** Элемент итогового порядка фото: сохранённое фото или n-й новый файл запроса. */
+export type PhotoOrderItem = { id: string } | { file: number }
+
+export const MAX_PHOTOS = 10
+export const MAX_PHOTO_BYTES = 2 * 1024 * 1024
+export const PHOTO_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp']
+
+/** Заменяет набор фото целиком: порядок из сохранённых `id` и новых файлов. */
+export function replaceEventPhotos(
+  id: string,
+  order: PhotoOrderItem[],
+  files: File[],
+): Promise<EventItem> {
+  const body = new FormData()
+  body.append('order', JSON.stringify(order))
+  for (const file of files) body.append('files', file, file.name)
+  return apiFetch(`/events/${id}/photos`, { method: 'PUT', body, auth: true })
+}
+
+export function photoPath(eventId: string, photoId: string): string {
+  return `/events/${eventId}/photos/${photoId}`
+}
+
+export function fetchEventPhoto(eventId: string, photoId: string): Promise<Blob> {
+  return apiFetchBlob(photoPath(eventId, photoId), { auth: true })
 }
