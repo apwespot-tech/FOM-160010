@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 
 import { configureAuth } from '@/api/client'
-import { clearPhotoCache, loadPhotoUrl } from '@/composables/usePhotoUrl'
+import { clearPhotoCache, loadCategoryCoverUrl, loadPhotoUrl } from '@/composables/usePhotoUrl'
 import { useSessionStore } from '@/stores/session'
 
 import { blobResponse, errorResponse, mockApi } from './helpers/api'
@@ -53,5 +53,32 @@ describe('кеш фото по id', () => {
     expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(2)
     revoke.mockRestore()
     clearPhotoCache()
+  })
+})
+
+describe('кеш картинок категорий и уменьшенных копий', () => {
+  it('картинка одной категории — один запрос, thumb и full фото кешируются раздельно', async () => {
+    const api = mockApi({
+      'GET /categories/4/covers/cov-4': () => blobResponse('image/webp'),
+      'GET /events/e1/photos/p1': () => blobResponse(),
+    })
+    const cinema = { id: 4, cover_id: 'cov-4' }
+
+    const covers = await Promise.all(
+      Array.from({ length: 5 }, () => loadCategoryCoverUrl(cinema, 'thumb')),
+    )
+    const thumb = await loadPhotoUrl('e1', 'p1', 'thumb')
+    const full = await loadPhotoUrl('e1', 'p1', 'full')
+
+    expect(new Set(covers).size).toBe(1)
+    expect(api.calls('GET /categories/4/covers/cov-4')).toHaveLength(1)
+    expect(api.calls('GET /categories/4/covers/cov-4')[0]?.url).toBe(
+      '/api/categories/4/covers/cov-4?size=thumb',
+    )
+    expect(thumb).not.toBe(full)
+    expect(api.calls('GET /events/e1/photos/p1').map((r) => r.url)).toEqual([
+      '/api/events/e1/photos/p1?size=thumb',
+      '/api/events/e1/photos/p1',
+    ])
   })
 })

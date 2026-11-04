@@ -22,6 +22,21 @@ describe('Шапка приложения', () => {
     expect(wrapper.get('[data-testid="profile-menu-button"]').text()).toBe('АИ')
   })
 
+  it('правый блок по макету: аватар — квадрат с инициалами, на колокольчике нет счётчика', async () => {
+    completeSession()
+    const { wrapper } = await renderApp('/profile')
+
+    const avatar = wrapper.get('[data-testid="profile-menu-button"]')
+    expect(avatar.text()).toBe('АИ')
+    expect(avatar.classes()).not.toContain('p-button-rounded')
+    const create = wrapper.get('[data-testid="create-event"]')
+    expect(create.text()).toBe('Создать мероприятие')
+    expect(create.find('.pi-plus').exists()).toBe(true)
+    const bell = wrapper.get('[data-testid="notifications-button"]')
+    expect(bell.find('.p-badge').exists()).toBe(false)
+    expect(bell.text()).toBe('')
+  })
+
   it('на мобильном: без ссылки «Мероприятия», кнопки — иконки с доступными именами', async () => {
     completeSession()
     setViewportWidth(360)

@@ -9,11 +9,13 @@ from app.models.event import MAX_PARTICIPANTS, PHOTO_CONTENT_TYPES
 from app.schemas.event import EventCreate, EventOut, EventPage, EventUpdate, ParticipantOut
 from app.services import event_service, photo_service
 from app.services.event_service import EventPeriod, EventScope
+from app.services.photo_service import PhotoSize
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+MAX_SEARCH_LENGTH = 100
 PHOTO_HEADERS = {
     "Cache-Control": "private, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
@@ -33,6 +35,7 @@ def list_events(
     starts_to: Annotated[AwareDatetime | None, Query(alias="to")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = PAGE_SIZE,
     offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[str | None, Query(max_length=MAX_SEARCH_LENGTH)] = None,
 ) -> EventPage:
     views, total = event_service.list_events(
         session,
@@ -46,6 +49,7 @@ def list_events(
         starts_to=starts_to,
         limit=limit,
         offset=offset,
+        search=q,
     )
     return EventPage(items=[EventOut.from_view(view) for view in views], total=total)
 
@@ -85,9 +89,13 @@ def delete_event(
     responses={200: {"content": {content_type: {} for content_type in PHOTO_CONTENT_TYPES}}},
 )
 def get_photo(
-    event_id: uuid.UUID, photo_id: uuid.UUID, user: CompletedUser, session: SessionDep
+    event_id: uuid.UUID,
+    photo_id: uuid.UUID,
+    user: CompletedUser,
+    session: SessionDep,
+    size: PhotoSize = PhotoSize.FULL,
 ) -> Response:
-    data, content_type = photo_service.get_photo(session, event_id, photo_id)
+    data, content_type = photo_service.get_photo(session, event_id, photo_id, size)
     # Фото с данным id никогда не меняется: браузер хранит его бессрочно, общие кеши — нет
     return Response(content=data, media_type=content_type, headers=PHOTO_HEADERS)
 

@@ -99,7 +99,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true))
         data-testid="gallery-thumb"
         @click="open(index + 1)"
       >
-        <EventPhotoImage :event-id="eventId" :photo-id="photo.id" :alt="alt(index + 1)" />
+        <EventPhotoImage
+          :event-id="eventId"
+          :photo-id="photo.id"
+          :alt="alt(index + 1)"
+          size="thumb"
+        />
       </button>
     </div>
 

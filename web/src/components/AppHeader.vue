@@ -44,6 +44,7 @@ const { open: openCreate } = useCreateEventDialog()
           :label="isMobile ? undefined : 'Создать мероприятие'"
           aria-label="Создать мероприятие"
           :rounded="isMobile"
+          class="app-header__create"
           data-testid="create-event"
           @click="openCreate"
         />
@@ -129,6 +130,19 @@ const { open: openCreate } = useCreateEventDialog()
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+}
+
+/* Основная кнопка шапки: скругление как у карточек, без градиента */
+.app-header__create.p-button:not(.p-button-rounded) {
+  border-radius: 12px;
+  padding-inline: 16px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgb(124 58 237 / 0.25);
+}
+
+.app-header__create.p-button-rounded {
+  width: var(--app-touch-target);
+  height: var(--app-touch-target);
 }
 
 @media (min-width: 640px) {

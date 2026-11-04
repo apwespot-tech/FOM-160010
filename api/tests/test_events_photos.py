@@ -491,3 +491,57 @@ def test_replacement_with_concurrent_delete(client: TestClient, db: Session) -> 
     assert put_result.status_code in (200, 404)
     assert count_photos(db) == 0
     assert db.scalar(select(func.count()).select_from(EventPhotoData)) == 0
+
+
+# --- уменьшенные копии ---
+
+
+def test_thumb_of_photo(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    event = create_event(client, organizer)
+    saved = put_photos(
+        client, organizer, event["id"], [{"file": 0}], [make_image("JPEG", (4000, 3000))]
+    ).json()
+    photo_id = photo_ids(saved)[0]
+    path = f"/api/events/{event['id']}/photos/{photo_id}"
+
+    thumb = client.get(path, params={"size": "thumb"}, headers=auth_header(organizer))
+    full = client.get(path, headers=auth_header(organizer))
+
+    assert thumb.status_code == 200
+    assert thumb.headers["content-type"] == "image/webp"
+    assert thumb.headers["cache-control"] == "private, max-age=31536000, immutable"
+    with Image.open(BytesIO(thumb.content)) as image:
+        assert image.size == (800, 600)
+    assert full.headers["content-type"] == "image/jpeg"
+    with Image.open(BytesIO(full.content)) as image:
+        assert image.size == (4000, 3000)
+
+
+def test_thumb_invalid_size(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    event = event_with_photos(client, organizer, 1)
+
+    response = client.get(
+        f"/api/events/{event['id']}/photos/{photo_ids(event)[0]}",
+        params={"size": "huge"},
+        headers=auth_header(organizer),
+    )
+
+    assert response.status_code == 422
+
+
+def test_rejected_set_leaves_no_thumbs(client: TestClient, db: Session) -> None:
+    organizer = register(client, ORGANIZER)
+    event = create_event(client, organizer)
+
+    response = put_photos(
+        client,
+        organizer,
+        event["id"],
+        [{"file": 0}, {"file": 1}],
+        [make_image("JPEG"), b"broken"],
+    )
+
+    assert response.status_code == 422
+    assert db.scalar(select(func.count()).select_from(EventPhotoData)) == 0

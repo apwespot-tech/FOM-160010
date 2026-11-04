@@ -7,6 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Category,
+    CategoryCover,
     Event,
     EventParticipant,
     EventPhoto,
@@ -178,7 +180,7 @@ def test_event_delete_cascades_photos(db: Session) -> None:
     photo = _photo(event.id)
     db.add(photo)
     db.flush()
-    db.add(EventPhotoData(photo_id=photo.id, data=b"abc"))
+    db.add(EventPhotoData(photo_id=photo.id, data=b"abc", thumb=b"t"))
     db.commit()
 
     db.execute(delete(Event).where(Event.id == event.id))
@@ -186,3 +188,42 @@ def test_event_delete_cascades_photos(db: Session) -> None:
 
     assert db.scalar(select(func.count()).select_from(EventPhoto)) == 0
     assert db.scalar(select(func.count()).select_from(EventPhotoData)) == 0
+
+
+# --- категории ---
+
+
+def _cover(db: Session) -> CategoryCover:
+    cover = CategoryCover(content_type="image/webp", data=b"full", thumb=b"thumb")
+    db.add(cover)
+    db.flush()
+    return cover
+
+
+def test_category_requires_cover(db: Session) -> None:
+    db.add(Category(name="Квесты", icon="pi-key"))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_category_requires_icon(db: Session) -> None:
+    cover = _cover(db)
+    db.add(Category(name="Квесты", cover_id=cover.id))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+@pytest.mark.parametrize("icon", ["🎲", "video", "pi-Video", "pi video", ""])
+def test_category_icon_format(db: Session, icon: str) -> None:
+    cover = _cover(db)
+    db.add(Category(name="Квесты", icon=icon, cover_id=cover.id))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_category_cover_cannot_be_deleted_while_used(db: Session) -> None:
+    cover_id = db.scalar(select(Category.cover_id).where(Category.name == "Кино"))
+
+    with pytest.raises(IntegrityError):
+        db.execute(delete(CategoryCover).where(CategoryCover.id == cover_id))
+        db.commit()

@@ -103,10 +103,10 @@ export const completeProfile: Profile = {
 }
 
 export const categories: Category[] = [
-  { id: 1, name: 'Настольные игры' },
-  { id: 2, name: 'Прогулки' },
-  { id: 3, name: 'Спорт' },
-  { id: 4, name: 'Кино' },
+  { id: 1, name: 'Настольные игры', icon: 'pi-th-large', cover_id: 'cov-1' },
+  { id: 2, name: 'Прогулки', icon: 'pi-map', cover_id: 'cov-2' },
+  { id: 3, name: 'Спорт', icon: 'pi-bolt', cover_id: 'cov-3' },
+  { id: 4, name: 'Кино', icon: 'pi-video', cover_id: 'cov-4' },
 ]
 
 /** Мероприятие другого организатора через сутки после 2026-10-31 12:00 МСК. */
@@ -119,7 +119,7 @@ export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
     starts_at: '2026-11-01T16:00:00Z',
     duration_minutes: 120,
     created_at: '2026-10-30T15:40:00Z',
-    category: { id: 1, name: 'Настольные игры' },
+    category: { id: 1, name: 'Настольные игры', icon: 'pi-th-large', cover_id: 'cov-1' },
     max_participants: 10,
     min_age: 0,
     organizer: { id: 'org-1', name: 'Борис Петров', photo_url: null, telegram: null },

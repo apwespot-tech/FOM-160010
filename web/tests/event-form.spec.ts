@@ -345,7 +345,7 @@ function createdFromForm(overrides: Partial<EventItem> = {}): EventItem {
   return eventItem({
     id: 'new-1',
     title: 'Футбол в парке',
-    category: { id: 3, name: 'Спорт' },
+    category: { id: 3, name: 'Спорт', icon: 'pi-bolt', cover_id: 'cov-3' },
     starts_at: '2026-11-01T16:00:00Z',
     duration_minutes: null,
     place: 'Парк Горького',

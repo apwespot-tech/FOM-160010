@@ -3,16 +3,25 @@
  * Фото мероприятия по id: загружается с токеном и берётся из кеша.
  * Пока грузится — нейтральный фон, при ошибке — иконка картинки без текста.
  */
+import type { ImageSize } from '@/api/events'
 import { usePhotoUrl } from '@/composables/usePhotoUrl'
 
 const props = withDefaults(
-  defineProps<{ eventId: string; photoId: string; alt: string; fit?: 'cover' | 'contain' }>(),
-  { fit: 'cover' },
+  defineProps<{
+    eventId: string
+    photoId: string
+    alt: string
+    fit?: 'cover' | 'contain'
+    /** Уменьшенная копия — для миниатюр и плиток формы */
+    size?: ImageSize
+  }>(),
+  { fit: 'cover', size: 'full' },
 )
 
 const { url, failed } = usePhotoUrl(
   () => props.eventId,
   () => props.photoId,
+  () => props.size,
 )
 </script>
 

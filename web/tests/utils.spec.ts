@@ -5,6 +5,7 @@ import { defineComponent, h, ref } from 'vue'
 import { ApiError } from '@/api/client'
 import { useCountdown } from '@/composables/useCountdown'
 import {
+  currentWeekRange,
   dateRangeToParams,
   formatCreatedAt,
   formatDuration,
@@ -260,5 +261,25 @@ describe('фото: проверка и тело запроса', () => {
     const error = new ApiError(422, 'photo_invalid', 'bad', { file: 1 })
     expect(draftKeyForFileError(drafts, error)).toBe('n2')
     expect(photoErrorMessage(error)).toBe('Поддерживаются JPEG, PNG и WebP')
+  })
+})
+
+describe('эта неделя', () => {
+  const day = (date: Date) => toIsoDate(date)
+
+  it('среда 4 ноября: с 4 по 8 ноября', () => {
+    const range = currentWeekRange(new Date(2026, 10, 4, 15, 30))
+    expect([day(range.from), day(range.to)]).toEqual(['2026-11-04', '2026-11-08'])
+    expect(range.from.getHours()).toBe(0)
+  })
+
+  it('воскресенье: только этот день', () => {
+    const range = currentWeekRange(new Date(2026, 10, 8, 22, 0))
+    expect([day(range.from), day(range.to)]).toEqual(['2026-11-08', '2026-11-08'])
+  })
+
+  it('понедельник: семь дней', () => {
+    const range = currentWeekRange(new Date(2026, 10, 2, 9, 0))
+    expect([day(range.from), day(range.to)]).toEqual(['2026-11-02', '2026-11-08'])
   })
 })

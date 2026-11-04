@@ -26,6 +26,10 @@ class CategoryOut(BaseModel):
 
     id: int
     name: str
+    # Имя иконки primeicons, например pi-video
+    icon: str
+    # Картинка категории: GET /categories/{id}/covers/{cover_id}
+    cover_id: uuid.UUID
 
 
 class EventCreate(BaseModel):
@@ -86,6 +90,8 @@ class EventView:
 
     event: Event
     category_name: str
+    category_icon: str
+    category_cover_id: uuid.UUID
     organizer_name: str
     organizer_photo_url: str | None
     organizer_telegram: str | None
@@ -131,7 +137,12 @@ class EventOut(BaseModel):
             starts_at=event.starts_at,
             duration_minutes=event.duration_minutes,
             created_at=event.created_at,
-            category=CategoryOut(id=event.category_id, name=view.category_name),
+            category=CategoryOut(
+                id=event.category_id,
+                name=view.category_name,
+                icon=view.category_icon,
+                cover_id=view.category_cover_id,
+            ),
             max_participants=event.max_participants,
             min_age=event.min_age,
             organizer=OrganizerOut(

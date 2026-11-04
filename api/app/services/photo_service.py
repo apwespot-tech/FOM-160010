@@ -1,5 +1,6 @@
 """Фото мероприятий: отдача файла и замена набора целиком."""
 
+import enum
 import json
 import uuid
 from datetime import datetime
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import AppError
-from app.models import Event, EventPhoto, EventPhotoData, User
+from app.models import Category, CategoryCover, Event, EventPhoto, EventPhotoData, User
 from app.models.event import MAX_PHOTOS
 from app.services.event_service import (
     _ensure_can_manage,
@@ -35,17 +36,44 @@ def photo_list_invalid(message: str) -> AppError:
     return AppError(422, "photo_list_invalid", message)
 
 
-def get_photo(session: Session, event_id: uuid.UUID, photo_id: uuid.UUID) -> tuple[bytes, str]:
-    """Содержимое и тип фото; фото другого мероприятия — как несуществующее."""
+class PhotoSize(enum.StrEnum):
+    FULL = "full"
+    THUMB = "thumb"
+
+
+THUMB_CONTENT_TYPE = "image/webp"
+
+
+def get_photo(
+    session: Session, event_id: uuid.UUID, photo_id: uuid.UUID, size: PhotoSize = PhotoSize.FULL
+) -> tuple[bytes, str]:
+    """Содержимое и тип фото (или его уменьшенной копии); фото другого мероприятия — 404."""
+    column = EventPhotoData.thumb if size is PhotoSize.THUMB else EventPhotoData.data
     row = session.execute(
-        select(EventPhotoData.data, EventPhoto.content_type)
+        select(column, EventPhoto.content_type)
         .join(EventPhoto, EventPhoto.id == EventPhotoData.photo_id)
         .where(EventPhoto.id == photo_id, EventPhoto.event_id == event_id)
     ).first()
     if row is None:
         raise photo_not_found()
     data, content_type = row
-    return data, content_type
+    return data, THUMB_CONTENT_TYPE if size is PhotoSize.THUMB else content_type
+
+
+def get_category_cover(
+    session: Session, category_id: int, cover_id: uuid.UUID, size: PhotoSize = PhotoSize.FULL
+) -> tuple[bytes, str]:
+    """Картинка категории; cover_id, не являющийся текущей картинкой категории, — 404."""
+    column = CategoryCover.thumb if size is PhotoSize.THUMB else CategoryCover.data
+    row = session.execute(
+        select(column, CategoryCover.content_type)
+        .join(Category, Category.cover_id == CategoryCover.id)
+        .where(Category.id == category_id, CategoryCover.id == cover_id)
+    ).first()
+    if row is None:
+        raise AppError(404, "cover_not_found", "Картинка категории не найдена")
+    data, content_type = row
+    return data, THUMB_CONTENT_TYPE if size is PhotoSize.THUMB else content_type
 
 
 def parse_order(raw: str, files_count: int) -> list[OrderItem]:
@@ -151,7 +179,7 @@ def replace_photos(
             created_at=now,
         )
         session.add(photo)
-        new_data.append(EventPhotoData(photo_id=photo.id, data=upload.data))
+        new_data.append(EventPhotoData(photo_id=photo.id, data=upload.data, thumb=upload.thumb))
     session.flush()
     session.add_all(new_data)
     session.commit()

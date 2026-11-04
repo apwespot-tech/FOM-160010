@@ -107,3 +107,27 @@ def test_too_many_pixels_is_rejected() -> None:
     with pytest.raises(AppError) as exc:
         process_photo(raw, 0)
     assert _error_code(exc) == "photo_invalid"
+
+
+@pytest.mark.parametrize(
+    ("image_format", "size", "expected"),
+    [
+        ("JPEG", (4000, 3000), (800, 600)),
+        ("PNG", (1600, 900), (800, 450)),
+        ("JPEG", (640, 480), (640, 480)),
+    ],
+)
+def test_thumb_size(image_format: str, size: tuple[int, int], expected: tuple[int, int]) -> None:
+    photo = process_photo(make_image(image_format, size), 0)
+
+    with Image.open(BytesIO(photo.thumb)) as thumb:
+        assert thumb.format == "WEBP"
+        assert thumb.size == expected
+
+
+def test_thumb_has_no_metadata_and_respects_orientation() -> None:
+    photo = process_photo(make_image("JPEG", (1200, 900), orientation=6, gps=True), 0)
+
+    with Image.open(BytesIO(photo.thumb)) as thumb:
+        assert thumb.size == (800, 1067)
+        assert len(thumb.getexif()) == 0

@@ -538,7 +538,15 @@ describe('Галерея фото', () => {
   it('повторное открытие окна не запрашивает фото снова', async () => {
     const { api, router } = await openEvent(eventItem({ photos: photos(2) }), photoHandlers(2))
     await settle()
-    expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(1)
+    const photoUrls = () =>
+      api.requests.filter((r) => r.path.startsWith('/events/e1/photos/')).map((r) => r.url)
+    // Окно: основное фото целиком и миниатюра второго; карточка списка: копия основного
+    const firstOpen = photoUrls()
+    expect([...firstOpen].sort()).toEqual([
+      '/api/events/e1/photos/p1',
+      '/api/events/e1/photos/p1?size=thumb',
+      '/api/events/e1/photos/p2?size=thumb',
+    ])
 
     await router.push('/')
     await settle()
@@ -546,8 +554,7 @@ describe('Галерея фото', () => {
     await settle()
 
     expect(exists('gallery-main')).toBe(true)
-    expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(1)
-    expect(api.calls('GET /events/e1/photos/p2')).toHaveLength(1)
+    expect(photoUrls()).toEqual(firstOpen)
   })
 
   it('ошибка загрузки фото — иконка без текста ошибки', async () => {

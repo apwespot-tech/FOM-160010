@@ -4,18 +4,23 @@ import { listEvents, PAGE_SIZE, type EventItem, type EventListParams } from '@/a
 
 /**
  * Список мероприятий с подгрузкой «Показать ещё». При смене параметров список
- * загружается заново, а ответы на устаревшие запросы игнорируются.
+ * загружается заново, а ответы на устаревшие запросы игнорируются. Пока идёт новый
+ * запрос, на экране остаются прежние карточки (`refreshing`), чтобы страница не
+ * схлопывалась и не прыгала при каждом изменении фильтров и поиска.
  */
 export function useEventList(params: Ref<EventListParams>) {
   const items = ref<EventItem[]>([])
   const total = ref(0)
   const loading = ref(false)
+  /** Список загружается заново, а прежние карточки ещё показаны */
+  const refreshing = ref(false)
   const error = ref(false)
   let requestId = 0
 
   async function load(offset: number): Promise<void> {
     const id = ++requestId
     loading.value = true
+    refreshing.value = offset === 0 && items.value.length > 0
     error.value = false
     try {
       const page = await listEvents({ ...params.value, limit: PAGE_SIZE, offset })
@@ -24,15 +29,21 @@ export function useEventList(params: Ref<EventListParams>) {
       total.value = page.total
     } catch {
       if (id !== requestId) return
+      // Прежние карточки относятся к другим параметрам — при ошибке их не показываем
+      if (offset === 0) {
+        items.value = []
+        total.value = 0
+      }
       error.value = true
     } finally {
-      if (id === requestId) loading.value = false
+      if (id === requestId) {
+        loading.value = false
+        refreshing.value = false
+      }
     }
   }
 
   function reload(): Promise<void> {
-    items.value = []
-    total.value = 0
     return load(0)
   }
 
@@ -59,7 +70,7 @@ export function useEventList(params: Ref<EventListParams>) {
     { immediate: true },
   )
 
-  return { items, total, loading, error, reload, loadMore, replaceItem, removeItem }
+  return { items, total, loading, refreshing, error, reload, loadMore, replaceItem, removeItem }
 }
 
 export interface EventListUpdates {

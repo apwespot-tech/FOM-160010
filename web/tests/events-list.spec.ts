@@ -1,6 +1,6 @@
 import DatePicker from 'primevue/datepicker'
 import InputNumber from 'primevue/inputnumber'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { EventItem } from '@/api/events'
 import { buildListQuery, parseListQuery, toListParams } from '@/composables/useEventListQuery'
@@ -8,6 +8,7 @@ import { buildListQuery, parseListQuery, toListParams } from '@/composables/useE
 import {
   categories,
   completeProfile,
+  errorResponse,
   eventItem,
   jsonResponse,
   mockApi,
@@ -80,6 +81,7 @@ describe('Состояние списка в адресе', () => {
       from: null,
       to: null,
       minFreePlaces: null,
+      search: '',
     })
     expect(toListParams(state)).toEqual({ scope: 'all' })
   })
@@ -93,6 +95,7 @@ describe('Состояние списка в адресе', () => {
         from: null,
         to: null,
         minFreePlaces: null,
+        search: '  ',
       }),
     ).toEqual({})
     expect(
@@ -103,8 +106,17 @@ describe('Состояние списка в адресе', () => {
         from: null,
         to: null,
         minFreePlaces: 4,
+        search: ' йога ',
       }),
-    ).toEqual({ tab: 'organized', period: 'past', category: '2', places: '4' })
+    ).toEqual({ tab: 'organized', period: 'past', category: '2', places: '4', q: 'йога' })
+  })
+
+  it('поиск: обрезка пробелов, слишком длинный отбрасывается', () => {
+    expect(parseListQuery({ q: '  мафия ' }).search).toBe('мафия')
+    expect(toListParams(parseListQuery({ q: ' мафия ' }))).toEqual({ scope: 'all', q: 'мафия' })
+    expect(parseListQuery({ q: 'а'.repeat(100) }).search).toHaveLength(100)
+    expect(parseListQuery({ q: 'а'.repeat(101) }).search).toBe('')
+    expect(toListParams(parseListQuery({ q: '   ' }))).toEqual({ scope: 'all' })
   })
 })
 
@@ -201,7 +213,10 @@ describe('Фильтры и состояние списка', () => {
     setViewportWidth(360)
     const { wrapper } = await renderApp('/?category=3&from=2026-12-01&to=2026-12-02&places=2')
 
-    expect(wrapper.find('[data-testid="event-filters"]').exists()).toBe(false)
+    // Поиск и быстрые фильтры видны, остальные поля — в окне «Фильтры»
+    expect(wrapper.find('[data-testid="filter-search"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="quick-free-places"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="filter-category"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="filters-button"]').text()).toContain('Фильтры (3)')
   })
 
@@ -355,5 +370,241 @@ describe('Пустые состояния списка', () => {
 
     expect(router.currentRoute.value.query).toEqual({})
     expect(lastListQuery(api).has('category_id')).toBe(false)
+  })
+})
+
+// --- новый каталог: заголовок, поиск, быстрые фильтры, «Сбросить» ---
+
+function typeSearch(wrapper: Awaited<ReturnType<typeof renderApp>>['wrapper'], text: string) {
+  const input = wrapper.get('[data-testid="filter-search"]').element as HTMLInputElement
+  input.value = text
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+describe('Заголовок списка мероприятий', () => {
+  it('над вкладками — «Мероприятия» и подзаголовок', async () => {
+    listApi(() => page([]))
+    const { wrapper } = await renderApp('/')
+
+    expect(wrapper.get('h1').text()).toBe('Мероприятия')
+    expect(wrapper.get('[data-testid="events-subtitle"]').text()).toBe(
+      'Присоединяйтесь к событиям или создавайте свои для поиска компании',
+    )
+  })
+})
+
+describe('Поиск по названию в списке', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('быстрый ввод — один запрос через 300 мс, q в адресе', async () => {
+    const api = listApi(() => page([]))
+    const { wrapper, router } = await renderApp('/')
+    const before = api.calls('GET /events').length
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    for (const text of ['м', 'ма', 'маф', 'мафи', 'мафия']) {
+      typeSearch(wrapper, text)
+      vi.advanceTimersByTime(100)
+    }
+    await settle()
+    expect(api.calls('GET /events')).toHaveLength(before)
+
+    vi.advanceTimersByTime(300)
+    vi.useRealTimers()
+    await settle()
+
+    expect(api.calls('GET /events')).toHaveLength(before + 1)
+    expect(lastListQuery(api).get('q')).toBe('мафия')
+    expect(router.currentRoute.value.query.q).toBe('мафия')
+  })
+
+  it('очистка и пробелы снимают поиск', async () => {
+    const api = listApi(() => page([]))
+    const { wrapper, router } = await renderApp('/?q=мафия')
+    expect(lastListQuery(api).get('q')).toBe('мафия')
+    expect((wrapper.get('[data-testid="filter-search"]').element as HTMLInputElement).value).toBe(
+      'мафия',
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    typeSearch(wrapper, '   ')
+    vi.advanceTimersByTime(300)
+    vi.useRealTimers()
+    await settle()
+
+    expect(lastListQuery(api).has('q')).toBe(false)
+    expect(router.currentRoute.value.query.q).toBeUndefined()
+  })
+
+  it('ссылка восстанавливает поиск вместе с фильтрами', async () => {
+    const api = listApi(() => page([]))
+    await renderApp('/?tab=joined&period=past&category=3&q=йога')
+
+    const query = lastListQuery(api)
+    expect(query.get('scope')).toBe('joined')
+    expect(query.get('period')).toBe('past')
+    expect(query.get('category_id')).toBe('3')
+    expect(query.get('q')).toBe('йога')
+  })
+})
+
+describe('Быстрые фильтры', () => {
+  // Среда, 4 ноября 2026, 15:00 МСК
+  const WEDNESDAY = new Date('2026-11-04T12:00:00Z')
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function chip(wrapper: Awaited<ReturnType<typeof renderApp>>['wrapper'], testId: string) {
+    return wrapper.get(`[data-testid="${testId}"]`)
+  }
+
+  it('«Есть свободные места» -> min_free_places=1 и подсветка', async () => {
+    const api = listApi(() => page([]))
+    const { wrapper, router } = await renderApp('/')
+
+    await chip(wrapper, 'quick-free-places').trigger('click')
+    await settle()
+
+    expect(lastListQuery(api).get('min_free_places')).toBe('1')
+    expect(router.currentRoute.value.query.places).toBe('1')
+    expect(chip(wrapper, 'quick-free-places').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('ручной ввод 3 гасит «Есть свободные места»', async () => {
+    const api = listApi(() => page([]))
+    const { wrapper } = await renderApp('/?places=1')
+    expect(chip(wrapper, 'quick-free-places').attributes('aria-pressed')).toBe('true')
+
+    wrapper
+      .findAllComponents(InputNumber)
+      .find((input) => input.attributes('data-testid') === 'filter-places')
+      ?.vm.$emit('update:modelValue', 3)
+    await settle()
+
+    expect(lastListQuery(api).get('min_free_places')).toBe('3')
+    expect(chip(wrapper, 'quick-free-places').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('«На этой неделе» в среду — с 4 по 8 ноября, повторное нажатие очищает даты', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(WEDNESDAY)
+    const api = listApi(() => page([]))
+    const { wrapper, router } = await renderApp('/')
+
+    await chip(wrapper, 'quick-this-week').trigger('click')
+    await settle()
+
+    expect(router.currentRoute.value.query).toMatchObject({ from: '2026-11-04', to: '2026-11-08' })
+    expect(lastListQuery(api).get('from')).toBe('2026-11-04T00:00:00+03:00')
+    expect(lastListQuery(api).get('to')).toBe('2026-11-09T00:00:00+03:00')
+    expect(chip(wrapper, 'quick-this-week').attributes('aria-pressed')).toBe('true')
+
+    await chip(wrapper, 'quick-this-week').trigger('click')
+    await settle()
+
+    expect(router.currentRoute.value.query.from).toBeUndefined()
+    expect(lastListQuery(api).has('from')).toBe(false)
+  })
+
+  it('«Сбросить» очищает поиск и фильтры и скрывается', async () => {
+    const api = listApi(() => page([]))
+    const { wrapper, router } = await renderApp('/?q=йога&category=3&from=2026-12-01&to=2026-12-02')
+
+    await wrapper.get('[data-testid="filters-reset"]').trigger('click')
+    await settle()
+
+    expect(router.currentRoute.value.query).toEqual({})
+    const query = lastListQuery(api)
+    expect(['q', 'category_id', 'from', 'to'].some((key) => query.has(key))).toBe(false)
+    expect((wrapper.get('[data-testid="filter-search"]').element as HTMLInputElement).value).toBe(
+      '',
+    )
+    expect(wrapper.find('[data-testid="filters-reset"]').exists()).toBe(false)
+  })
+
+  it('без поиска и фильтров «Сбросить» нет', async () => {
+    listApi(() => page([]))
+    const { wrapper } = await renderApp('/')
+
+    expect(wrapper.find('[data-testid="filters-reset"]').exists()).toBe(false)
+  })
+})
+
+describe('Обновление списка без скачков', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('при поиске прежние карточки остаются до ответа, спиннера нет', async () => {
+    let release: (() => void) | null = null
+    const api = listApi((request) => {
+      if (!query(request).has('q')) return page([eventItem({ id: 'a', title: 'Первое' })])
+      // Ответ на поиск придёт, когда тест разрешит
+      return new Promise<Response>((resolve) => {
+        release = () => resolve(page([eventItem({ id: 'b', title: 'Мафия' })]))
+      })
+    })
+    const { wrapper } = await renderApp('/')
+    expect(wrapper.findAll('[data-testid="event-card"]')).toHaveLength(1)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    typeSearch(wrapper, 'маф')
+    vi.advanceTimersByTime(300)
+    vi.useRealTimers()
+    await settle()
+
+    // Запрос ушёл, но карточки на месте, приглушены, спиннера нет
+    expect(lastListQuery(api).get('q')).toBe('маф')
+    const list = wrapper.get('[data-testid="event-list"]')
+    expect(list.attributes('aria-busy')).toBe('true')
+    expect(list.classes()).toContain('events-page__list--refreshing')
+    expect(wrapper.findAll('[data-testid="event-card"] h2').map((h) => h.text())).toEqual([
+      'Первое',
+    ])
+    expect(wrapper.find('[data-testid="events-loading"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="events-empty"]').exists()).toBe(false)
+
+    release!()
+    await settle()
+
+    expect(wrapper.findAll('[data-testid="event-card"] h2').map((h) => h.text())).toEqual(['Мафия'])
+    expect(wrapper.get('[data-testid="event-list"]').attributes('aria-busy')).toBe('false')
+  })
+
+  it('первая загрузка — со спиннером', async () => {
+    let release: (() => void) | null = null
+    listApi(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(page([eventItem()]))
+        }),
+    )
+    const { wrapper } = await renderApp('/')
+
+    expect(wrapper.find('[data-testid="events-loading"]').exists()).toBe(true)
+    release!()
+    await settle()
+    expect(wrapper.find('[data-testid="events-loading"]').exists()).toBe(false)
+  })
+
+  it('ошибка при обновлении — прежние карточки убираются, показывается ошибка', async () => {
+    const api = listApi((request) =>
+      query(request).has('q') ? errorResponse(500, 'oops') : page([eventItem()]),
+    )
+    const { wrapper } = await renderApp('/')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    typeSearch(wrapper, 'маф')
+    vi.advanceTimersByTime(300)
+    vi.useRealTimers()
+    await settle()
+
+    expect(lastListQuery(api).get('q')).toBe('маф')
+    expect(wrapper.findAll('[data-testid="event-card"]')).toHaveLength(0)
+    expect(wrapper.find('[data-testid="events-error"]').exists()).toBe(true)
   })
 })

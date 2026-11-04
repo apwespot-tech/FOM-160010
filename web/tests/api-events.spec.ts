@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEvent,
   deleteEvent,
+  fetchCategoryCover,
   fetchEventPhoto,
   joinEvent,
   leaveEvent,
@@ -119,5 +120,27 @@ describe('API фото мероприятий', () => {
 
     expect(blob.type).toBe('image/png')
     expect(api.calls('GET /events/e1/photos/p1')).toHaveLength(2)
+  })
+})
+
+describe('API каталога: поиск, размеры, картинки категорий', () => {
+  it('адреса', async () => {
+    const api = mockApi({
+      'GET /events': () => jsonResponse(200, { items: [], total: 0 }),
+      'GET /events/e1/photos/p1': () => blobResponse(),
+      'GET /categories/2/covers/cov-2': () => blobResponse('image/webp'),
+    })
+
+    await listEvents({ scope: 'all', q: 'маф' })
+    await fetchEventPhoto('e1', 'p1', 'thumb')
+    await fetchCategoryCover({ id: 2, cover_id: 'cov-2' }, 'thumb')
+    await fetchCategoryCover({ id: 2, cover_id: 'cov-2' })
+
+    expect(api.requests.map((r) => r.url)).toEqual([
+      '/api/events?scope=all&q=%D0%BC%D0%B0%D1%84',
+      '/api/events/e1/photos/p1?size=thumb',
+      '/api/categories/2/covers/cov-2?size=thumb',
+      '/api/categories/2/covers/cov-2',
+    ])
   })
 })

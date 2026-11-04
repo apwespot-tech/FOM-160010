@@ -9,7 +9,14 @@ export type EventPeriod = 'upcoming' | 'past'
 export interface Category {
   id: number
   name: string
+  /** Имя иконки primeicons, например `pi-video` */
+  icon: string
+  /** Картинка категории — обложка карточек мероприятий без фото */
+  cover_id: string
 }
+
+/** Размер картинки: исходник или уменьшенная копия (WebP, ширина до 800 px). */
+export type ImageSize = 'full' | 'thumb'
 
 /** Человек в мероприятии. Telegram организатора — только записанным и администратору. */
 export interface PersonRef {
@@ -75,6 +82,8 @@ export interface EventListParams {
   to?: string
   limit?: number
   offset?: number
+  /** Поиск по подстроке в названии */
+  q?: string
 }
 
 export const PAGE_SIZE = 20
@@ -147,10 +156,33 @@ export function replaceEventPhotos(
   return apiFetch(`/events/${id}/photos`, { method: 'PUT', body, auth: true })
 }
 
-export function photoPath(eventId: string, photoId: string): string {
-  return `/events/${eventId}/photos/${photoId}`
+function sizeQuery(size: ImageSize): string {
+  return size === 'thumb' ? '?size=thumb' : ''
 }
 
-export function fetchEventPhoto(eventId: string, photoId: string): Promise<Blob> {
-  return apiFetchBlob(photoPath(eventId, photoId), { auth: true })
+export function photoPath(eventId: string, photoId: string, size: ImageSize = 'full'): string {
+  return `/events/${eventId}/photos/${photoId}${sizeQuery(size)}`
+}
+
+export function fetchEventPhoto(
+  eventId: string,
+  photoId: string,
+  size: ImageSize = 'full',
+): Promise<Blob> {
+  return apiFetchBlob(photoPath(eventId, photoId, size), { auth: true })
+}
+
+/** Адрес содержит cover_id: новая картинка категории — новый адрес, кеш бессрочный. */
+export function categoryCoverPath(
+  category: Pick<Category, 'id' | 'cover_id'>,
+  size: ImageSize = 'full',
+): string {
+  return `/categories/${category.id}/covers/${category.cover_id}${sizeQuery(size)}`
+}
+
+export function fetchCategoryCover(
+  category: Pick<Category, 'id' | 'cover_id'>,
+  size: ImageSize = 'full',
+): Promise<Blob> {
+  return apiFetchBlob(categoryCoverPath(category, size), { auth: true })
 }

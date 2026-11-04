@@ -20,8 +20,8 @@ import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
 import { provideEventListUpdates, useEventList } from '@/composables/useEventList'
 import { useEventListQuery, type EventTab } from '@/composables/useEventListQuery'
 
-const { state, params, activeFilters, update, resetFilters } = useEventListQuery()
-const { items, total, loading, error, reload, loadMore, replaceItem, removeItem } =
+const { state, params, activeFilters, hasActive, update, resetFilters } = useEventListQuery()
+const { items, total, loading, refreshing, error, reload, loadMore, replaceItem, removeItem } =
   useEventList(params)
 provideEventListUpdates({ replaceItem, removeItem })
 const { open: openCreate, onEventCreated } = useCreateEventDialog()
@@ -65,7 +65,12 @@ function retry() {
 <template>
   <main class="events-page">
     <div class="events-page__inner">
-      <h1 class="events-page__title">Мероприятия</h1>
+      <header class="events-page__header">
+        <h1 class="events-page__title">Мероприятия</h1>
+        <p class="events-page__subtitle" data-testid="events-subtitle">
+          Присоединяйтесь к событиям или создавайте свои для поиска компании
+        </p>
+      </header>
 
       <Tabs :value="state.tab" class="events-page__tabs" @update:value="onTab">
         <TabList>
@@ -75,9 +80,8 @@ function retry() {
         </TabList>
       </Tabs>
 
-      <div class="events-page__toolbar">
+      <div v-if="state.tab !== 'find'" class="events-page__toolbar">
         <SelectButton
-          v-if="state.tab !== 'find'"
           :model-value="state.period"
           :options="periodOptions"
           option-label="label"
@@ -88,22 +92,31 @@ function retry() {
           data-testid="period"
           @update:model-value="onPeriod"
         />
-        <EventFilters
-          :category-id="state.categoryId"
-          :from="state.from"
-          :to="state.to"
-          :min-free-places="state.minFreePlaces"
-          :active-count="activeFilters"
-          @change="update"
-          @reset="resetFilters"
-        />
       </div>
 
-      <div class="events-page__list" data-testid="event-list">
+      <EventFilters
+        :category-id="state.categoryId"
+        :from="state.from"
+        :to="state.to"
+        :min-free-places="state.minFreePlaces"
+        :search="state.search"
+        :active-count="activeFilters"
+        :has-active="hasActive"
+        @change="update"
+        @reset="resetFilters"
+      />
+
+      <!-- Пока список обновляется, прежние карточки остаются (приглушены): страница не прыгает -->
+      <div
+        class="events-page__list"
+        :class="{ 'events-page__list--refreshing': refreshing }"
+        :aria-busy="refreshing"
+        data-testid="event-list"
+      >
         <EventListCard v-for="event in items" :key="event.id" :event="event" />
       </div>
 
-      <div v-if="loading" class="events-page__status" data-testid="events-loading">
+      <div v-if="loading && !refreshing" class="events-page__status" data-testid="events-loading">
         <ProgressSpinner style="width: 40px; height: 40px" stroke-width="4" aria-label="Загрузка" />
       </div>
 
@@ -115,7 +128,7 @@ function retry() {
       <div v-else-if="!items.length" class="events-page__empty" data-testid="events-empty">
         <p class="events-page__empty-text">{{ emptyText }}</p>
         <Button
-          v-if="state.tab === 'find' && activeFilters"
+          v-if="state.tab === 'find' && hasActive"
           type="button"
           label="Сбросить фильтры"
           outlined
@@ -163,10 +176,28 @@ function retry() {
   gap: 16px;
 }
 
+.events-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .events-page__title {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .events-page__title {
+    font-size: 2rem;
+  }
+}
+
+.events-page__subtitle {
+  margin: 0;
+  color: var(--app-text-muted);
 }
 
 /* Вкладки прокручиваются внутри себя, страница — нет */
@@ -205,13 +236,21 @@ function retry() {
 
 .events-page__list {
   display: grid;
-  gap: 12px;
+  gap: 16px;
+  transition: opacity 0.15s;
+}
+
+/* Задержка: на быстром ответе приглушения не видно, мигания нет */
+.events-page__list--refreshing {
+  opacity: 0.55;
+  transition-delay: 0.15s;
+  pointer-events: none;
 }
 
 @media (min-width: 640px) {
   .events-page__list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 20px;
   }
 }
 

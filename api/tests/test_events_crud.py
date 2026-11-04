@@ -57,7 +57,12 @@ def test_create_event(client: TestClient) -> None:
         "starts_at": "2026-11-01T12:00:00Z",
         "duration_minutes": 120,
         "created_at": "2026-10-31T12:00:00Z",
-        "category": {"id": 1, "name": "Настольные игры"},
+        "category": {
+            "id": 1,
+            "name": "Настольные игры",
+            "icon": "pi-th-large",
+            "cover_id": body["category"]["cover_id"],
+        },
         "max_participants": 5,
         "min_age": 16,
         "organizer": {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
@@ -257,7 +262,7 @@ def test_update_several_fields_and_clear_duration(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["duration_minutes"] is None
-    assert body["category"] == {"id": 3, "name": "Спорт"}
+    assert body["category"]["id"] == 3 and body["category"]["name"] == "Спорт"
     assert body["min_age"] == 18
     assert body["starts_at"] == "2026-11-05T12:00:00Z"
 

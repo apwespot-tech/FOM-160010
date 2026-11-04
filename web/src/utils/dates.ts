@@ -121,3 +121,11 @@ export function formatEventDay(iso: string, now: Date = new Date()): { day: stri
   const [weekday = '', date = '', time = ''] = formatEventDate(iso, now).split(', ')
   return { day: `${weekday}, ${date}`, time }
 }
+
+/** «Эта неделя» для быстрого фильтра: с сегодняшнего дня по воскресенье (неделя — с понедельника). */
+export function currentWeekRange(now: Date = new Date()): { from: Date; to: Date } {
+  const today = startOfDay(now)
+  // getDay(): 0 — воскресенье, 1 — понедельник
+  const daysToSunday = (7 - today.getDay()) % 7
+  return { from: today, to: addDays(today, daysToSunday) }
+}

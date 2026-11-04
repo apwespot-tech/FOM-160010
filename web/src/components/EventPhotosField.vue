@@ -67,6 +67,7 @@ function onChange(event: Event): void {
             :event-id="photoEventId"
             :photo-id="photo.id"
             :alt="`Фото ${index + 1}`"
+            size="thumb"
           />
           <span v-if="index === 0" class="photos-field__main" data-testid="photo-main-mark">
             Основное

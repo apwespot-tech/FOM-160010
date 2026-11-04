@@ -43,7 +43,6 @@ function toggle(event: Event) {
   <Button
     type="button"
     :label="initials(name)"
-    rounded
     severity="secondary"
     aria-label="Меню профиля"
     aria-haspopup="true"
@@ -73,14 +72,20 @@ function toggle(event: Event) {
 </template>
 
 <style scoped>
+/* Аватар — скруглённый квадрат с инициалами (макет каталога) */
 .profile-menu__button {
   width: var(--app-touch-target);
   height: var(--app-touch-target);
   padding: 0;
+  border-radius: 12px;
+  background: var(--p-primary-50);
+  border: 1px solid var(--p-primary-200);
+  color: var(--p-primary-700);
+  font-weight: 700;
+}
+
+.profile-menu__button:hover {
   background: var(--p-primary-100);
-  border-color: var(--p-primary-100);
-  color: var(--p-primary-800);
-  font-weight: 600;
 }
 
 .profile-menu__header {

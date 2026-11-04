@@ -49,12 +49,16 @@ def _photo_ids() -> ScalarSelect[list[uuid.UUID] | None]:
     )
 
 
-ViewRow = Row[Event, str, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]
+# Мероприятие, категория, организатор (имя, фото, Telegram), число участников,
+# признак записи, id фото. Категория — целой строкой: она маленькая, без байтов картинки
+ViewRow = Row[
+    Event, Category, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None
+]
 
 
 def _view_query(
     viewer_id: uuid.UUID,
-) -> Select[Event, str, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]:
+) -> Select[Event, Category, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]:
     """Мероприятие с категорией, организатором, числом участников, записью и фото."""
     participants_count = _participants_count()
     is_joined = (
@@ -65,7 +69,7 @@ def _view_query(
     return (
         select(
             Event,
-            Category.name,
+            Category,
             User.name,
             User.photo_url,
             User.telegram,
@@ -79,10 +83,12 @@ def _view_query(
 
 
 def _to_view(row: ViewRow, viewer: User) -> EventView:
-    event, category_name, name, photo_url, telegram, participants_count, is_joined, photos = row
+    event, category, name, photo_url, telegram, participants_count, is_joined, photos = row
     return EventView(
         event=event,
-        category_name=category_name,
+        category_name=category.name,
+        category_icon=category.icon,
+        category_cover_id=category.cover_id,
         organizer_name=name or "",
         organizer_photo_url=photo_url,
         # Контакт организатора — только записанным участникам и администратору
@@ -124,6 +130,7 @@ def list_events(
     starts_to: datetime | None,
     limit: int,
     offset: int,
+    search: str | None = None,
 ) -> tuple[list[EventView], int]:
     if scope is EventScope.ALL and period is EventPeriod.PAST:
         raise AppError(
@@ -162,6 +169,10 @@ def list_events(
         conditions.append(Event.starts_at >= starts_from)
     if starts_to is not None:
         conditions.append(Event.starts_at < starts_to)
+    if search and (needle := search.strip()):
+        # Подстрока без учёта регистра; \, % и _ ищутся как обычные символы
+        escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conditions.append(Event.title.ilike(f"%{escaped}%", escape="\\"))
 
     total = session.scalar(select(func.count()).select_from(Event).where(*conditions)) or 0
     rows = session.execute(

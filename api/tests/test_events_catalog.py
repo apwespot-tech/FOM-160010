@@ -51,7 +51,11 @@ def test_filter_by_category(client: TestClient) -> None:
     body = catalog(client, organizer, category_id=3).json()
 
     assert [item["id"] for item in body["items"]] == [sport["id"]]
-    assert body["items"][0]["category"] == {"id": 3, "name": "Спорт"}
+    assert {k: body["items"][0]["category"][k] for k in ("id", "name", "icon")} == {
+        "id": 3,
+        "name": "Спорт",
+        "icon": "pi-bolt",
+    }
     assert body["total"] == 1
 
 
@@ -276,3 +280,70 @@ def test_min_free_places_validation(client: TestClient) -> None:
     me = register(client, ORGANIZER)
     for value in (0, 101):
         assert catalog(client, me, min_free_places=value).status_code == 422
+
+
+# --- поиск по названию ---
+
+
+def titles(response: Any) -> list[str]:
+    return [item["title"] for item in response.json()["items"]]
+
+
+def test_search_substring_case_insensitive(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    create_event(client, organizer, title="Турнир по «Мафии»")
+    create_event(client, organizer, title="Вечер настольных игр")
+
+    response = catalog(client, organizer, q="маф")
+
+    assert titles(response) == ["Турнир по «Мафии»"]
+    assert response.json()["total"] == 1
+
+
+def test_search_within_scope(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    other = register(client, OTHER)
+    create_event(client, organizer, title="Йога в парке")
+    foreign = create_event(client, other, title="Йога утром")
+    client.post(f"/api/events/{foreign['id']}/join", headers=auth_header(organizer))
+
+    response = catalog(client, organizer, scope="organized", q="йога")
+
+    assert titles(response) == ["Йога в парке"]
+
+
+def test_search_blank_means_no_search(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    create_event(client, organizer, title="Первое")
+    create_event(client, organizer, title="Второе")
+
+    assert catalog(client, organizer, q="  ").json()["total"] == 2
+
+
+def test_search_length_boundary(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+
+    assert catalog(client, organizer, q="а" * 100).status_code == 200
+    assert catalog(client, organizer, q="а" * 101).status_code == 422
+
+
+def test_search_special_characters_are_literal(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    create_event(client, organizer, title="Скидка 50% на кино")
+    create_event(client, organizer, title="Кино в парке")
+    create_event(client, organizer, title="Игра a_b")
+    create_event(client, organizer, title="Игра axb")
+
+    assert titles(catalog(client, organizer, q="50%")) == ["Скидка 50% на кино"]
+    assert titles(catalog(client, organizer, q="a_b")) == ["Игра a_b"]
+
+
+def test_search_counts_with_other_filters(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    create_event(client, organizer, title="Кино ночью", category_id=4)
+    create_event(client, organizer, title="Кино-квиз", category_id=1)
+
+    response = catalog(client, organizer, q="кино", category_id=4)
+
+    assert titles(response) == ["Кино ночью"]
+    assert response.json()["total"] == 1

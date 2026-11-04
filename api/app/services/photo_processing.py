@@ -8,7 +8,7 @@ from typing import BinaryIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.errors import AppError
-from app.models.event import MAX_PHOTO_BYTES
+from app.models.event import MAX_PHOTO_BYTES, THUMB_WIDTH
 
 # Защита от «бомб»: картинка, которая маленькая в файле, но огромная в памяти
 MAX_PIXELS = 40_000_000
@@ -25,6 +25,18 @@ _FORMATS: dict[str, tuple[str, dict[str, object]]] = {
 class ProcessedPhoto:
     data: bytes
     content_type: str
+    # Уменьшенная копия: WebP не шире THUMB_WIDTH
+    thumb: bytes
+
+
+def make_thumb(image: Image.Image) -> bytes:
+    """WebP не шире THUMB_WIDTH, пропорции сохраняются, маленькие картинки не увеличиваются."""
+    copy = image.convert("RGBA" if image.mode in ("RGBA", "LA", "P") else "RGB")
+    # Высота не ограничивает: уменьшаем только по ширине
+    copy.thumbnail((THUMB_WIDTH, 10_000))
+    output = BytesIO()
+    copy.save(output, format="WEBP", quality=80)
+    return output.getvalue()
 
 
 def photo_too_large(index: int) -> AppError:
@@ -77,4 +89,6 @@ def process_photo(raw: bytes, index: int) -> ProcessedPhoto:
         image = image.convert("RGB")
     output = BytesIO()
     image.save(output, format=image_format, exif=b"", **save_options)
-    return ProcessedPhoto(data=output.getvalue(), content_type=content_type)
+    return ProcessedPhoto(
+        data=output.getvalue(), content_type=content_type, thumb=make_thumb(image)
+    )

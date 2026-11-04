@@ -14,6 +14,8 @@ export interface EventListState {
   to: Date | null
   /** Не меньше N свободных мест */
   minFreePlaces: number | null
+  /** Поиск по названию (без пробелов по краям); пустая строка — без поиска */
+  search: string
 }
 
 const TAB_SCOPE: Record<EventTab, EventScope> = {
@@ -23,6 +25,7 @@ const TAB_SCOPE: Record<EventTab, EventScope> = {
 }
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 export const MAX_FREE_PLACES = 100
+export const MAX_SEARCH_LENGTH = 100
 
 function single(value: LocationQuery[string] | undefined): string | null {
   const raw = Array.isArray(value) ? value[0] : value
@@ -41,6 +44,7 @@ export function parseListQuery(query: LocationQuery): EventListState {
     tab !== 'find' && single(query.period) === 'past' ? 'past' : 'upcoming'
   const category = Number(single(query.category))
   const places = Number(single(query.places))
+  const search = (single(query.q) ?? '').trim()
   return {
     tab,
     period,
@@ -49,6 +53,7 @@ export function parseListQuery(query: LocationQuery): EventListState {
     to: parseDate(single(query.to)),
     minFreePlaces:
       Number.isInteger(places) && places >= 1 && places <= MAX_FREE_PLACES ? places : null,
+    search: search.length <= MAX_SEARCH_LENGTH ? search : '',
   }
 }
 
@@ -61,6 +66,8 @@ export function buildListQuery(state: EventListState): LocationQueryRaw {
   if (state.from) query.from = toIsoDate(state.from)
   if (state.to) query.to = toIsoDate(state.to)
   if (state.minFreePlaces !== null) query.places = String(state.minFreePlaces)
+  const search = state.search.trim()
+  if (search) query.q = search
   return query
 }
 
@@ -73,6 +80,8 @@ export function toListParams(state: EventListState): EventListParams {
   const range = dateRangeToParams(state.from, state.to)
   if (range.from) params.from = range.from
   if (range.to) params.to = range.to
+  const search = state.search.trim()
+  if (search) params.q = search
   return params
 }
 
@@ -89,6 +98,8 @@ export function useEventListQuery() {
       (state.value.from || state.value.to ? 1 : 0) +
       (state.value.minFreePlaces !== null ? 1 : 0),
   )
+  /** Активен поиск или хотя бы один фильтр: показывается «Сбросить». */
+  const hasActive = computed(() => activeFilters.value > 0 || state.value.search !== '')
 
   function update(patch: Partial<EventListState>): void {
     const next = { ...state.value, ...patch }
@@ -100,8 +111,8 @@ export function useEventListQuery() {
   }
 
   function resetFilters(): void {
-    update({ categoryId: null, from: null, to: null, minFreePlaces: null })
+    update({ categoryId: null, from: null, to: null, minFreePlaces: null, search: '' })
   }
 
-  return { state, params, activeFilters, update, resetFilters }
+  return { state, params, activeFilters, hasActive, update, resetFilters }
 }

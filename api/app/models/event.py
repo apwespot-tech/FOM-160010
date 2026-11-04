@@ -27,15 +27,43 @@ MAX_DURATION_MINUTES = 1440
 MAX_PHOTOS = 10
 MAX_PHOTO_BYTES = 2 * 1024 * 1024
 PHOTO_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp")
+# Уменьшенные копии фото и картинок категорий — WebP не шире этого значения
+THUMB_WIDTH = 800
+ICON_PATTERN = "^pi-[a-z0-9-]+$"
+
+
+class CategoryCover(Base):
+    """Картинка категории: полная и уменьшенная копия. Замена картинки — новая строка."""
+
+    __tablename__ = "category_covers"
+    __table_args__ = (
+        CheckConstraint(
+            f"content_type IN ({', '.join(repr(t) for t in PHOTO_CONTENT_TYPES)})",
+            name="content_type_values",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()")
+    )
+    content_type: Mapped[str] = mapped_column(String(20))
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    thumb: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Category(Base):
-    """Справочник категорий; пополняется миграциями."""
+    """Справочник категорий; пополняется миграциями, каждая категория — с иконкой и картинкой."""
 
     __tablename__ = "categories"
+    __table_args__ = (CheckConstraint(f"icon ~ '{ICON_PATTERN}'", name="icon_format"),)
 
     id: Mapped[int] = mapped_column(Integer, Identity(always=False), primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True)
+    icon: Mapped[str] = mapped_column(String(40))
+    cover_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("category_covers.id", ondelete="RESTRICT")
+    )
 
 
 class Event(Base):
@@ -121,3 +149,5 @@ class EventPhotoData(Base):
         ForeignKey("event_photos.id", ondelete="CASCADE"), primary_key=True
     )
     data: Mapped[bytes] = mapped_column(LargeBinary)
+    # Уменьшенная копия (WebP, ширина <= THUMB_WIDTH) для карточек и миниатюр
+    thumb: Mapped[bytes] = mapped_column(LargeBinary)
