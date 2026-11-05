@@ -4,6 +4,7 @@
  * Чужой профиль виден участникам общих мероприятий (проверяет сервер), без доступа —
  * «Профиль недоступен». На своём профиле «Редактировать» перестраивает страницу в форму,
  * а незаданные поля показываются заглушками, которые тоже открывают редактирование.
+ * Плитки рейтинга и раздел отзывов — в режиме просмотра.
  */
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -13,14 +14,16 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { getUserProfile, type Profile } from '@/api/profile'
+import type { Rating } from '@/api/reviews'
 import CategoryTag from '@/components/CategoryTag.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
 import ProfileEditForm from '@/components/ProfileEditForm.vue'
+import ProfileReviews from '@/components/ProfileReviews.vue'
 import { loadUserImageUrl, useImageUrl } from '@/composables/usePhotoUrl'
 import { provideProfileForm, useProfileForm } from '@/composables/useProfileForm'
 import { useSessionStore } from '@/stores/session'
 import { formatMemberSince, formatRuDate } from '@/utils/dates'
-import { formatAge, formatPhone } from '@/utils/format'
+import { formatAge, formatPhone, formatRating, pluralReviews } from '@/utils/format'
 import { shareLink } from '@/utils/share'
 
 const NOT_SET = 'не указано'
@@ -42,6 +45,21 @@ const editing = ref(false)
 const profile = computed<Profile | null>(() => (isOwn.value ? session.profile : other.value))
 /** Заглушки незаданных полей — только на своём профиле в режиме просмотра. */
 const showPlaceholders = computed(() => isOwn.value && !editing.value)
+const isAdmin = computed(() => session.profile?.roles.includes('admin') === true)
+
+const ratingTiles = computed(() => {
+  const ratings = profile.value?.ratings
+  if (!ratings) return []
+  return [
+    { key: 'organizer', label: 'Рейтинг организатора', rating: ratings.as_organizer },
+    { key: 'participant', label: 'Рейтинг участника', rating: ratings.as_participant },
+  ]
+})
+
+/** «4,8» или «Мало отзывов (2)» */
+function ratingValue(rating: Rating): string {
+  return rating.average === null ? `Мало отзывов (${rating.count})` : formatRating(rating.average)
+}
 
 async function load(): Promise<void> {
   unavailable.value = false
@@ -65,6 +83,19 @@ async function load(): Promise<void> {
 }
 
 watch(userId, () => void load(), { immediate: true })
+
+/** После удаления отзыва — свежие рейтинги и счётчики без перезагрузки страницы. */
+async function refreshProfile(): Promise<void> {
+  if (isOwn.value) {
+    await session.loadProfile().catch(() => undefined)
+    return
+  }
+  try {
+    other.value = await getUserProfile(userId.value)
+  } catch {
+    // Профиль остаётся прежним; список отзывов уже обновлён
+  }
+}
 
 const { url: coverUrl } = useImageUrl(
   () => {
@@ -395,7 +426,43 @@ async function share(): Promise<void> {
               <div class="profile-stats__label">Посещено мероприятий</div>
             </div>
           </div>
+          <div
+            v-for="tile in ratingTiles"
+            :key="tile.key"
+            class="profile-stats__tile"
+            :data-testid="`rating-${tile.key}`"
+          >
+            <span class="profile-stats__icon profile-stats__icon--rating">
+              <i class="pi pi-star-fill" aria-hidden="true" />
+            </span>
+            <div>
+              <div
+                class="profile-stats__value"
+                :class="{ 'profile-stats__value--few': tile.rating.average === null }"
+                :data-testid="`rating-${tile.key}-value`"
+              >
+                {{ ratingValue(tile.rating) }}
+              </div>
+              <div class="profile-stats__label">
+                {{ tile.label
+                }}<template v-if="tile.rating.average !== null">
+                  ·
+                  <span :data-testid="`rating-${tile.key}-count`">{{
+                    pluralReviews(tile.rating.count)
+                  }}</span></template
+                >
+              </div>
+            </div>
+          </div>
         </section>
+
+        <ProfileReviews
+          v-if="!editing"
+          :user-id="profile.id"
+          :ratings="profile.ratings"
+          :is-admin="isAdmin"
+          @changed="refreshProfile"
+        />
       </template>
 
       <div v-else class="profile-page__status" data-testid="profile-loading">
@@ -697,6 +764,17 @@ async function share(): Promise<void> {
 .profile-stats__icon--attended {
   background: var(--app-accent-soft);
   color: var(--app-accent-text);
+}
+
+.profile-stats__icon--rating {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+
+.profile-stats__value--few {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--app-text-muted);
 }
 
 .profile-stats__value {

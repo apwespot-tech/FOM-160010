@@ -153,3 +153,18 @@ export function formatMemberSince(iso: string): string {
   const month = monthGenitive.formatToParts(date).find((part) => part.type === 'month')?.value
   return `На сайте с ${month ?? ''} ${date.getFullYear()} года`
 }
+
+/** «6 ноября в 18:00» (год — если не текущий): сроки отзывов. */
+export function formatDayTime(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso)
+  const label =
+    date.getFullYear() === now.getFullYear()
+      ? dayMonthFormat.format(date)
+      : dayMonthYearFormat.format(date)
+  return `${label} в ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** «12 ноября 2026» — дата отзыва. */
+export function formatLongDate(iso: string): string {
+  return dayMonthYearFormat.format(new Date(iso)).replace(/\s*г\.$/, '')
+}

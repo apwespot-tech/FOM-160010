@@ -68,7 +68,13 @@ def test_create_event(client: TestClient) -> None:
         },
         "max_participants": 5,
         "min_age": 16,
-        "organizer": {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None},
+        "organizer": {
+            "id": organizer["id"],
+            "name": "Анна",
+            "avatar_id": None,
+            "telegram": None,
+            "rating": None,
+        },
         "photos": [],
         "participants_count": 1,
         "free_places": 4,
@@ -84,7 +90,7 @@ def test_organizer_is_only_participant_after_create(client: TestClient) -> None:
     response = client.get(f"/api/events/{event['id']}/participants", headers=auth_header(organizer))
 
     assert response.json() == [
-        {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None}
+        {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None, "rating": None}
     ]
 
 
@@ -171,7 +177,7 @@ def test_view_foreign_event(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["is_joined"] is False
-    assert set(response.json()["organizer"]) == {"id", "name", "avatar_id", "telegram"}
+    assert set(response.json()["organizer"]) == {"id", "name", "avatar_id", "telegram", "rating"}
 
 
 # --- контакты организатора ---

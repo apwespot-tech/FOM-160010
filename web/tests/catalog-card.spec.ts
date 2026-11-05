@@ -152,7 +152,13 @@ describe('Карточка мероприятия в списке', () => {
   it('своё мероприятие: «Вы организатор» и «Организатор»', async () => {
     const { wrapper } = await renderList([
       eventItem({
-        organizer: { id: completeProfile.id, name: 'Анна', avatar_id: null, telegram: null },
+        organizer: {
+          id: completeProfile.id,
+          name: 'Анна',
+          avatar_id: null,
+          telegram: null,
+          rating: null,
+        },
         is_joined: true,
       }),
     ])

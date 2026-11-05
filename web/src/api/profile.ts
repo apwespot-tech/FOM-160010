@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchBlob } from './client'
 import type { City, ImageSize } from './events'
+import type { ProfileRatings } from './reviews'
 
 export type Role = 'participant' | 'organizer' | 'admin'
 
@@ -33,6 +34,8 @@ export interface Profile {
   cover_id: string | null
   created_at: string
   stats: ProfileStats
+  /** Рейтинги как организатора и как участника */
+  ratings: ProfileRatings
   roles: Role[]
   profile_completed: boolean
 }

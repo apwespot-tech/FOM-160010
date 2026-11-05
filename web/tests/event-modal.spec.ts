@@ -25,7 +25,7 @@ import { bodyGet, renderApp, settle, waitForPath, withStoredSession } from './he
 const NOW = new Date('2026-10-31T09:00:00Z')
 const ME = completeProfile.id
 const ADMIN: Profile = { ...completeProfile, roles: ['organizer', 'participant', 'admin'] }
-const PERSON = { avatar_id: null, telegram: null }
+const PERSON = { avatar_id: null, telegram: null, rating: null }
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -200,6 +200,7 @@ describe('Блок организатора', () => {
           name: 'Борис Петров',
           avatar_id: 'av-1',
           telegram: '@boris_k',
+          rating: null,
         },
       }),
       { 'GET /users/org-1/images/av-1': () => blobResponse() },
@@ -218,7 +219,15 @@ describe('Блок организатора', () => {
 
   it('организатор не видит «Написать» на своём мероприятии', async () => {
     await openEvent(
-      mine({ organizer: { id: ME, name: 'Анна Иванова', avatar_id: null, telegram: '@anna_k' } }),
+      mine({
+        organizer: {
+          id: ME,
+          name: 'Анна Иванова',
+          avatar_id: null,
+          telegram: '@anna_k',
+          rating: null,
+        },
+      }),
     )
     expect(exists('organizer-write')).toBe(false)
   })
@@ -433,7 +442,7 @@ describe('Участники', () => {
   it('организатор первым, Telegram ссылкой, без Telegram — без подзаголовка', async () => {
     const people: Participant[] = [
       { id: 'org-1', name: 'Борис Петров', ...PERSON },
-      { id: ME, name: 'Анна Иванова', avatar_id: null, telegram: '@anna_k' },
+      { id: ME, name: 'Анна Иванова', avatar_id: null, telegram: '@anna_k', rating: null },
     ]
     await openEvent(eventItem({ is_joined: true, participants_count: 2 }), {
       'GET /events/e1/participants': () => jsonResponse(200, people),
@@ -719,13 +728,19 @@ describe('Люди и город в окне мероприятия', () => {
     const { router } = await openEvent(
       eventItem({
         is_joined: true,
-        organizer: { id: 'org-1', name: 'Борис Петров', avatar_id: 'av-1', telegram: null },
+        organizer: {
+          id: 'org-1',
+          name: 'Борис Петров',
+          avatar_id: 'av-1',
+          telegram: null,
+          rating: null,
+        },
       }),
       {
         'GET /events/e1/participants': () =>
           jsonResponse(200, [
-            { id: 'org-1', name: 'Борис Петров', avatar_id: 'av-1', telegram: null },
-            { id: ME, name: 'Анна Иванова', avatar_id: 'av-2', telegram: null },
+            { id: 'org-1', name: 'Борис Петров', avatar_id: 'av-1', telegram: null, rating: null },
+            { id: ME, name: 'Анна Иванова', avatar_id: 'av-2', telegram: null, rating: null },
           ]),
         'GET /users/org-1/images/av-1': () => blobResponse(),
         [`GET /users/${ME}/images/av-2`]: () => errorResponse(500, 'oops'),

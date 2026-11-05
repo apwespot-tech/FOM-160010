@@ -2,25 +2,45 @@
 /**
  * Участники мероприятия: аватар или инициалы, имя (ссылки на профиль), Telegram ссылкой;
  * автору и админу — «Исключить» у каждого, кроме организатора.
+ * Рейтинг: у организатора — как организатора, у остальных — как участника.
+ * В открытом окне отзывов у каждого, кроме себя, — «Оценить» или своя оценка и «Изменить».
  */
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { RouterLink } from 'vue-router'
 
 import type { Participant } from '@/api/events'
+import type { Review } from '@/api/reviews'
 import PersonAvatar from '@/components/PersonAvatar.vue'
+import RatingBadge from '@/components/RatingBadge.vue'
 import { telegramUrl } from '@/utils/format'
 
-defineProps<{
-  participants: Participant[] | null
-  organizerId: string
-  count: number
-  max: number
-  /** Список доступен (записан или администратор) */
-  visible: boolean
-  canRemove: boolean
+withDefaults(
+  defineProps<{
+    participants: Participant[] | null
+    organizerId: string
+    count: number
+    max: number
+    /** Список доступен (записан или администратор) */
+    visible: boolean
+    canRemove: boolean
+    /** Текущий пользователь: себя не оценивают */
+    currentUserId?: string | null
+    /** Свои отзывы по получателю */
+    reviews?: Record<string, Review>
+    /** Окно отзывов открыто, и пользователь записан */
+    canReview?: boolean
+    /** Срок отзывов: «Оценить участников можно до …» */
+    reviewHint?: string | null
+  }>(),
+  { currentUserId: null, reviews: () => ({}), canReview: false, reviewHint: null },
+)
+const emit = defineEmits<{
+  remove: [participant: Participant]
+  review: [participant: Participant]
 }>()
-const emit = defineEmits<{ remove: [participant: Participant] }>()
+
+const STARS = [1, 2, 3, 4, 5]
 </script>
 
 <template>
@@ -28,6 +48,9 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
     <h3 class="participants__title" data-testid="participants-title">
       Участники ({{ count }}/{{ max }})
     </h3>
+    <p v-if="visible && reviewHint" class="participants__review-hint" data-testid="review-hint">
+      {{ reviewHint }}
+    </p>
     <p v-if="!visible" class="participants__hint" data-testid="participants-hidden">
       Список участников виден после записи
     </p>
@@ -51,13 +74,19 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
           />
         </RouterLink>
         <div class="participants__info">
-          <RouterLink
-            :to="`/users/${participant.id}`"
-            class="participants__name app-break"
-            data-testid="participant-name"
-          >
-            {{ participant.name }}
-          </RouterLink>
+          <span class="participants__name-row">
+            <RouterLink
+              :to="`/users/${participant.id}`"
+              class="participants__name app-break"
+              data-testid="participant-name"
+            >
+              {{ participant.name }}
+            </RouterLink>
+            <RatingBadge
+              :value="participant.rating"
+              :label="participant.id === organizerId ? 'Рейтинг организатора' : 'Рейтинг участника'"
+            />
+          </span>
           <a
             v-if="participant.telegram"
             :href="telegramUrl(participant.telegram)"
@@ -68,6 +97,39 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
           >
             {{ participant.telegram }}
           </a>
+        </div>
+        <div
+          v-if="participant.id !== currentUserId && (reviews[participant.id] || canReview)"
+          class="participants__review"
+          data-testid="participant-review"
+        >
+          <span
+            v-if="reviews[participant.id]"
+            class="participants__my-stars"
+            :aria-label="`Ваша оценка: ${reviews[participant.id]?.stars} из 5`"
+            data-testid="participant-my-stars"
+          >
+            <i
+              v-for="star in STARS"
+              :key="star"
+              :class="[
+                'pi',
+                star <= (reviews[participant.id]?.stars ?? 0) ? 'pi-star-fill' : 'pi-star',
+              ]"
+              aria-hidden="true"
+            />
+          </span>
+          <Button
+            v-if="canReview"
+            type="button"
+            :label="reviews[participant.id] ? 'Изменить' : 'Оценить'"
+            :icon="reviews[participant.id] ? 'pi pi-pencil' : 'pi pi-star'"
+            text
+            size="small"
+            :aria-label="`${reviews[participant.id] ? 'Изменить отзыв' : 'Оценить'}: ${participant.name}`"
+            data-testid="participant-review-button"
+            @click="emit('review', participant)"
+          />
         </div>
         <Tag
           v-if="participant.id === organizerId"
@@ -99,6 +161,38 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.participants__review-hint {
+  margin: 0 0 10px;
+  color: var(--app-text-muted);
+  font-size: 0.875rem;
+}
+
+.participants__name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.participants__review {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.participants__review .p-button {
+  min-height: 44px;
+}
+
+.participants__my-stars {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--app-accent);
+  font-size: 0.75rem;
 }
 
 .participants__hint {

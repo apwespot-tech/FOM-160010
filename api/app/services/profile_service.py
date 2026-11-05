@@ -19,6 +19,7 @@ from app.schemas.profile import (
 )
 from app.services.auth_service import lock_phone, revoke_pending_codes, revoke_user_refresh_tokens
 from app.services.dictionary_service import missing_reference_error
+from app.services.rating_service import profile_ratings
 
 MIN_BIRTH_DATE = date(1900, 1, 1)
 MIN_USER_AGE = 14
@@ -77,6 +78,7 @@ def build_profile(session: Session, user: User, now: datetime) -> ProfileOut:
         city=CityOut.model_validate(city) if city else None,
         interests=[InterestOut(id=i, name=name, icon=icon) for i, name, icon in interests],
         stats=ProfileStats(organized_count=organized or 0, attended_count=attended or 0),
+        ratings=profile_ratings(session, user.id),
     )
 
 

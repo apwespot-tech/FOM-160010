@@ -358,12 +358,19 @@ def test_participants_list(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None},
+        {
+            "id": organizer["id"],
+            "name": "Анна",
+            "avatar_id": None,
+            "telegram": None,
+            "rating": None,
+        },
         {
             "id": other["id"],
             "name": "Борис",
             "avatar_id": boris_avatar,
             "telegram": "@boris_k",
+            "rating": None,
         },
     ]
 

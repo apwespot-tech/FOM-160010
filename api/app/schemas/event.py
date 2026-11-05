@@ -83,9 +83,13 @@ class PersonOut(BaseModel):
 class OrganizerOut(PersonOut):
     """telegram заполнен только для записанных участников и администратора."""
 
+    # Рейтинг как организатора; null, если отзывов меньше трёх
+    rating: float | None
+
 
 class ParticipantOut(PersonOut):
-    pass
+    # У организатора — рейтинг как организатора, у остальных — как участника
+    rating: float | None
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,7 @@ class EventView:
     is_joined: bool
     # id фото по порядку; первое — основное
     photo_ids: tuple[uuid.UUID, ...] = ()
+    organizer_rating: float | None = None
 
 
 class PhotoRef(BaseModel):
@@ -158,6 +163,7 @@ class EventOut(BaseModel):
                 name=view.organizer_name,
                 avatar_id=view.organizer_avatar_id,
                 telegram=view.organizer_telegram,
+                rating=view.organizer_rating,
             ),
             photos=[PhotoRef(id=photo_id) for photo_id in view.photo_ids],
             participants_count=view.participants_count,

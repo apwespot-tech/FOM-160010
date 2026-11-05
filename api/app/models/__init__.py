@@ -9,6 +9,7 @@ from app.models.event import (
     EventPhoto,
     EventPhotoData,
 )
+from app.models.review import Review, ReviewKind
 from app.models.user import Role, User, UserImage, UserInterest, UserRole
 
 __all__ = [
@@ -22,6 +23,8 @@ __all__ = [
     "EventPhoto",
     "EventPhotoData",
     "RefreshToken",
+    "Review",
+    "ReviewKind",
     "Role",
     "User",
     "UserImage",

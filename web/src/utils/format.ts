@@ -40,6 +40,16 @@ export function formatMinAge(age: number): string {
   return `${age}+`
 }
 
+/** 4.8 -> «4,8», 5 -> «5,0». */
+export function formatRating(value: number): string {
+  return value.toFixed(1).replace('.', ',')
+}
+
+/** «1 отзыв», «3 отзыва», «12 отзывов». */
+export function pluralReviews(count: number): string {
+  return `${count} ${plural(count, ['отзыв', 'отзыва', 'отзывов'])}`
+}
+
 /** «@boris_k» -> https://t.me/boris_k */
 export function telegramUrl(telegram: string): string {
   return `https://t.me/${telegram.replace(/^@/, '')}`

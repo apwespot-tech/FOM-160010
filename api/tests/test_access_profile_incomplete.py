@@ -72,6 +72,13 @@ def test_draft_access(app: FastAPI, client: TestClient) -> None:
     assert ("GET", "/api/events/{event_id}/participants") in denied
     assert ("PUT", "/api/profile/{kind}") in denied
     assert ("GET", "/api/profile/{user_id}") in denied
+    assert {
+        ("POST", "/api/events/{event_id}/reviews"),
+        ("GET", "/api/events/{event_id}/reviews/mine"),
+        ("PATCH", "/api/reviews/{review_id}"),
+        ("DELETE", "/api/reviews/{review_id}"),
+        ("GET", "/api/users/{user_id}/reviews"),
+    } <= denied
     # Изменение справочников — только администратору, а он всегда с заполненным профилем
     assert {
         ("POST", "/api/categories"),

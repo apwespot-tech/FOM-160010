@@ -16,6 +16,7 @@ from app.models import Role, User
 from app.models.user import ABOUT_MAX_LENGTH
 from app.phones import Phone
 from app.schemas.city import CityOut
+from app.schemas.review import ProfileRatings
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Telegram = Annotated[str, StringConstraints(pattern=r"^@[A-Za-z0-9_]{5,32}$")]
@@ -55,6 +56,8 @@ class ProfileOut(BaseModel):
     cover_id: uuid.UUID | None
     created_at: datetime
     stats: ProfileStats
+    # Рейтинги как организатора и как участника
+    ratings: ProfileRatings
     roles: list[Role]
     profile_completed: bool
 
@@ -67,6 +70,7 @@ class ProfileOut(BaseModel):
         city: CityOut | None,
         interests: list[InterestOut],
         stats: ProfileStats,
+        ratings: ProfileRatings,
     ) -> "ProfileOut":
         return cls(
             id=user.id,
@@ -83,6 +87,7 @@ class ProfileOut(BaseModel):
             cover_id=user.cover_id,
             created_at=user.created_at,
             stats=stats,
+            ratings=ratings,
             roles=sorted(user.roles),
             profile_completed=user.profile_completed,
         )

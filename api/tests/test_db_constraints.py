@@ -15,6 +15,8 @@ from app.models import (
     EventPhoto,
     EventPhotoData,
     RefreshToken,
+    Review,
+    ReviewKind,
     Role,
     User,
     UserImage,
@@ -287,3 +289,76 @@ def test_user_delete_cascades_images_and_interests(db: Session) -> None:
 
     assert db.scalar(select(func.count()).select_from(UserImage)) == 0
     assert db.scalar(select(func.count()).select_from(UserInterest)) == 0
+
+
+# --- отзывы ---
+
+
+def _review_setup(db: Session) -> tuple[Event, User, User]:
+    author, target = User(phone="+79991110011"), User(phone="+79991110012")
+    db.add_all([author, target])
+    db.flush()
+    event = _event(target.id)
+    db.add(event)
+    db.flush()
+    return event, author, target
+
+
+def _review(event: Event, author: User, target: User, **overrides: object) -> Review:
+    fields: dict[str, object] = {
+        "event_id": event.id,
+        "event_title": event.title,
+        "author_id": author.id,
+        "target_id": target.id,
+        "kind": ReviewKind.ORGANIZER,
+        "stars": 5,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+    fields.update(overrides)
+    return Review(**fields)
+
+
+@pytest.mark.parametrize("stars", [1, 5])
+def test_review_stars_bounds_accepted(db: Session, stars: int) -> None:
+    event, author, target = _review_setup(db)
+    db.add(_review(event, author, target, stars=stars))
+    db.commit()
+
+
+@pytest.mark.parametrize("stars", [0, 6])
+def test_review_stars_out_of_range(db: Session, stars: int) -> None:
+    event, author, target = _review_setup(db)
+    db.add(_review(event, author, target, stars=stars))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_review_about_self_rejected(db: Session) -> None:
+    event, author, _ = _review_setup(db)
+    db.add(_review(event, author, author))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_review_unique_per_event_author_target(db: Session) -> None:
+    event, author, target = _review_setup(db)
+    db.add(_review(event, author, target))
+    db.commit()
+    db.add(_review(event, author, target, stars=3))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_review_survives_event_delete(db: Session) -> None:
+    event, author, target = _review_setup(db)
+    review = _review(event, author, target, event_title="Настолки")
+    db.add(review)
+    db.commit()
+
+    db.execute(delete(Event).where(Event.id == event.id))
+    db.commit()
+    db.expire_all()
+
+    row = db.execute(select(Review.event_id, Review.event_title)).one()
+    assert row == (None, "Настолки")

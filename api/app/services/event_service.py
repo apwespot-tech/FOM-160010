@@ -3,17 +3,31 @@ import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import ColumnElement, Row, ScalarSelect, Select, delete, exists, func, select
+from sqlalchemy import (
+    ColumnElement,
+    Row,
+    ScalarSelect,
+    Select,
+    case,
+    delete,
+    exists,
+    func,
+    select,
+)
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ages import calculate_age
 from app.errors import AppError, forbidden, not_found
-from app.models import Category, City, Event, EventParticipant, EventPhoto, User
+from app.models import Category, City, Event, EventParticipant, EventPhoto, ReviewKind, User
 from app.schemas.event import EventCreate, EventUpdate, EventView, ParticipantOut
+from app.schemas.review import rating_value
 from app.services.dictionary_service import missing_reference_error
+from app.services.rating_service import rating_subquery
 
 
 def event_not_found() -> AppError:
@@ -52,7 +66,8 @@ def _photo_ids() -> ScalarSelect[list[uuid.UUID] | None]:
 
 
 # Мероприятие, категория, город, организатор (имя, аватар, Telegram), число участников,
-# признак записи, id фото. Категория и город — целыми строками: они маленькие, без байтов
+# признак записи, id фото, рейтинг организатора. Категория и город — целыми строками:
+# они маленькие, без байтов
 ViewRow = Row[
     Event,
     Category,
@@ -63,6 +78,8 @@ ViewRow = Row[
     int,
     bool,
     list[uuid.UUID] | None,
+    Decimal | None,
+    *tuple[Any, ...],
 ]
 
 
@@ -78,6 +95,8 @@ def _view_query(
     int,
     bool,
     list[uuid.UUID] | None,
+    Decimal | None,
+    *tuple[Any, ...],
 ]:
     """Мероприятие с категорией, городом, организатором, числом участников, записью и фото."""
     participants_count = _participants_count()
@@ -97,6 +116,7 @@ def _view_query(
             participants_count,
             is_joined,
             _photo_ids(),
+            rating_subquery(Event.organizer_id, ReviewKind.ORGANIZER),
         )
         .join(Category, Category.id == Event.category_id)
         .join(City, City.id == Event.city_id)
@@ -105,7 +125,19 @@ def _view_query(
 
 
 def _to_view(row: ViewRow, viewer: User) -> EventView:
-    event, category, city, name, avatar_id, telegram, participants_count, is_joined, photos = row
+    (
+        event,
+        category,
+        city,
+        name,
+        avatar_id,
+        telegram,
+        participants_count,
+        is_joined,
+        photos,
+        organizer_rating,
+        *_,
+    ) = row
     return EventView(
         event=event,
         category_name=category.name,
@@ -120,6 +152,7 @@ def _to_view(row: ViewRow, viewer: User) -> EventView:
         participants_count=participants_count,
         is_joined=is_joined,
         photo_ids=tuple(photos or ()),
+        organizer_rating=rating_value(organizer_rating),
     )
 
 
@@ -314,8 +347,13 @@ def list_participants(session: Session, viewer: User, event_id: uuid.UUID) -> li
     elif session.get(Event, event_id) is None:
         raise event_not_found()
 
+    # Организатор оценивается как организатор, остальные — как участники
+    rating: ColumnElement[Decimal | None] = case(
+        (User.id == Event.organizer_id, rating_subquery(User.id, ReviewKind.ORGANIZER)),
+        else_=rating_subquery(User.id, ReviewKind.PARTICIPANT),
+    )
     rows = session.execute(
-        select(User.id, User.name, User.avatar_id, User.telegram)
+        select(User.id, User.name, User.avatar_id, User.telegram, rating)
         .join(EventParticipant, EventParticipant.user_id == User.id)
         .join(Event, Event.id == EventParticipant.event_id)
         .where(EventParticipant.event_id == event_id)
@@ -323,8 +361,14 @@ def list_participants(session: Session, viewer: User, event_id: uuid.UUID) -> li
         .order_by(User.id != Event.organizer_id, EventParticipant.joined_at, User.id)
     )
     return [
-        ParticipantOut(id=user_id, name=name or "", avatar_id=avatar_id, telegram=telegram)
-        for user_id, name, avatar_id, telegram in rows
+        ParticipantOut(
+            id=user_id,
+            name=name or "",
+            avatar_id=avatar_id,
+            telegram=telegram,
+            rating=rating_value(user_rating),
+        )
+        for user_id, name, avatar_id, telegram, user_rating in rows
     ]
 
 

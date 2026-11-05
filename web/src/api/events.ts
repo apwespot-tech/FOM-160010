@@ -32,6 +32,12 @@ export interface PersonRef {
   telegram: string | null
 }
 
+/** Человек с рейтингом: у организатора — как организатора, у остальных — как участника. */
+export interface RatedPerson extends PersonRef {
+  /** null, если отзывов меньше трёх */
+  rating: number | null
+}
+
 export interface PhotoRef {
   id: string
 }
@@ -48,7 +54,7 @@ export interface EventItem {
   category: Category
   max_participants: number
   min_age: MinAge
-  organizer: PersonRef
+  organizer: RatedPerson
   /** Фото по порядку, первое — основное. Содержимое — отдельным запросом по `id`. */
   photos: PhotoRef[]
   participants_count: number
@@ -62,7 +68,7 @@ export interface EventPage {
   total: number
 }
 
-export type Participant = PersonRef
+export type Participant = RatedPerson
 
 export interface EventCreate {
   title: string

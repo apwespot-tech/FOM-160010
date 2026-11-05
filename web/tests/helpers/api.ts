@@ -95,6 +95,10 @@ export const draftProfile: Profile = {
   cover_id: null,
   created_at: '2023-11-05T09:00:00Z',
   stats: { organized_count: 0, attended_count: 0 },
+  ratings: {
+    as_organizer: { average: null, count: 0 },
+    as_participant: { average: null, count: 0 },
+  },
   roles: ['organizer', 'participant'],
   profile_completed: false,
 }
@@ -136,7 +140,7 @@ export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
     category: { id: 1, name: 'Настольные игры', icon: 'pi-th-large', cover_id: 'cov-1' },
     max_participants: 10,
     min_age: 0,
-    organizer: { id: 'org-1', name: 'Борис Петров', avatar_id: null, telegram: null },
+    organizer: { id: 'org-1', name: 'Борис Петров', avatar_id: null, telegram: null, rating: null },
     photos: [],
     participants_count: 3,
     free_places: 7,

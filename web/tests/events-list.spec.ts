@@ -320,6 +320,7 @@ describe('Карточка мероприятия в списке', () => {
             name: 'Анна Иванова',
             avatar_id: null,
             telegram: null,
+            rating: null,
           },
         }),
       ]),

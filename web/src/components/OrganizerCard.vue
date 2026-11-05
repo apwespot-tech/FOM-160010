@@ -4,19 +4,21 @@
  * Имя и аватар — ссылки на профиль только для записанных и администратора: остальным
  * сервер профиль не отдаст (403), поэтому у них это обычный текст.
  * «Написать» — ссылка на Telegram; сервер отдаёт его только записанным и администратору.
+ * Рейтинг организатора виден всем; если отзывов меньше трёх, его нет.
  */
 import Tag from 'primevue/tag'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import type { PersonRef } from '@/api/events'
+import type { RatedPerson } from '@/api/events'
 import PersonAvatar from '@/components/PersonAvatar.vue'
+import RatingBadge from '@/components/RatingBadge.vue'
 import { formatCreatedAt } from '@/utils/dates'
 import { telegramUrl } from '@/utils/format'
 
 const props = withDefaults(
   defineProps<{
-    organizer: PersonRef
+    organizer: RatedPerson
     createdAt: string
     /** false — это сам организатор, писать себе не нужно */
     canWrite?: boolean
@@ -60,6 +62,7 @@ const linkAttrs = computed(() => (props.linked ? { to: `/users/${props.organizer
           {{ organizer.name }}
         </component>
         <Tag value="Организатор" class="organizer__tag" />
+        <RatingBadge :value="organizer.rating" label="Рейтинг организатора" />
       </div>
       <span class="organizer__created" data-testid="organizer-created">
         Создал мероприятие {{ formatCreatedAt(createdAt) }}

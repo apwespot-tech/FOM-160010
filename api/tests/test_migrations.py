@@ -140,3 +140,24 @@ def test_migration_0006_keeps_dictionaries_and_ignores_case(migrated_db: str) ->
             conn.execute(text("INSERT INTO cities (name) VALUES ('москва')"))
     finally:
         engine.dispose()
+
+
+def test_migration_0007_reviews_roundtrip(migrated_db: str) -> None:
+    config = alembic_config(migrated_db)
+    engine = create_engine(migrated_db)
+    try:
+        command.downgrade(config, "0006")
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT to_regclass('reviews')")).scalar() is None
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM pg_type WHERE typname = 'review_kind'")
+                ).scalar()
+                == 0
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT to_regclass('reviews')")).scalar() == "reviews"
+    finally:
+        command.upgrade(config, "head")
+        engine.dispose()

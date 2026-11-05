@@ -112,6 +112,7 @@ def test_catalog_item_fields_for_viewer(client: TestClient) -> None:
         "name": "Анна",
         "avatar_id": None,
         "telegram": None,
+        "rating": None,
     }
     assert item["participants_count"] == 1
     assert item["free_places"] == 2

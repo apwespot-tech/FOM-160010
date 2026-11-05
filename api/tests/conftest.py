@@ -88,7 +88,7 @@ def app(settings: Settings, clock: FakeClock) -> Iterator[FastAPI]:
     with application.state.engine.begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE event_photo_data, event_photos, event_participants, events, "
+                "TRUNCATE reviews, event_photo_data, event_photos, event_participants, events, "
                 "user_interests, user_images, users, user_roles, auth_codes, refresh_tokens "
                 "RESTART IDENTITY CASCADE"
             )

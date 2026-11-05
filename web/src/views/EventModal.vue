@@ -6,6 +6,7 @@
  * (стандарт «Окна и карточки с данными»: приоритет у просмотра).
  * Права в интерфейсе — подсказки; проверяет их сервер, после каждого действия
  * данные перезапрашиваются, а карточка в списке под окном обновляется.
+ * На начавшемся мероприятии записанному показываются свои отзывы и срок окна отзывов.
  */
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -27,18 +28,20 @@ import {
   type EventItem,
   type Participant,
 } from '@/api/events'
+import { getMyReviews, type MyReviews, type Review } from '@/api/reviews'
 import EventFormFields from '@/components/EventFormFields.vue'
 import EventGallery from '@/components/EventGallery.vue'
 import EventParticipants from '@/components/EventParticipants.vue'
 import EventTile from '@/components/EventTile.vue'
 import OrganizerCard from '@/components/OrganizerCard.vue'
+import ReviewDialog from '@/components/ReviewDialog.vue'
 import { provideEventForm } from '@/composables/eventFormContext'
 import { injectEventListUpdates } from '@/composables/useEventList'
 import { eventErrorMessage, useEventForm } from '@/composables/useEventForm'
 import { useRequireCompletedProfile } from '@/composables/useRequireCompletedProfile'
 import { useSessionStore } from '@/stores/session'
 import { useIsMobile } from '@/utils/breakpoints'
-import { formatDuration, formatEventDay } from '@/utils/dates'
+import { formatDayTime, formatDuration, formatEventDay } from '@/utils/dates'
 import { formatFreePlaces, formatMinAge } from '@/utils/format'
 
 const route = useRoute()
@@ -56,6 +59,9 @@ const notFound = ref(false)
 const loadError = ref(false)
 const busy = ref(false)
 const editing = ref(false)
+const myReviews = ref<MyReviews | null>(null)
+const reviewTarget = ref<Participant | null>(null)
+const reviewDialogVisible = ref(false)
 
 const eventId = computed(() => String(route.params.id))
 const isAdmin = computed(() => session.profile?.roles.includes('admin') === true)
@@ -74,6 +80,30 @@ const joinBlockedReason = computed(() => {
 })
 const when = computed(() => (event.value ? formatEventDay(event.value.starts_at) : null))
 const showFooter = computed(() => !!event.value && !isPast.value)
+
+// Окно отзывов: границы приходят с сервером, он же проверяет их при сохранении
+const reviewWindow = computed<'before' | 'open' | 'closed' | null>(() => {
+  if (!myReviews.value) return null
+  const now = new Date()
+  if (now < new Date(myReviews.value.opens_at)) return 'before'
+  if (now < new Date(myReviews.value.closes_at)) return 'open'
+  return 'closed'
+})
+const canReview = computed(() => reviewWindow.value === 'open')
+const reviewHint = computed(() => {
+  if (!myReviews.value) return null
+  if (reviewWindow.value === 'before')
+    return `Оценить участников можно будет с ${formatDayTime(myReviews.value.opens_at)}`
+  if (reviewWindow.value === 'open')
+    return `Оценить участников можно до ${formatDayTime(myReviews.value.closes_at)}`
+  return null
+})
+const reviewsByTarget = computed<Record<string, Review>>(() =>
+  Object.fromEntries((myReviews.value?.items ?? []).map((review) => [review.target_id, review])),
+)
+const reviewKind = computed(() =>
+  reviewTarget.value?.id === event.value?.organizer.id ? 'organizer' : 'participant',
+)
 
 // Если поля сохранились, а фото нет — окно и список уже показывают новые поля
 const controller = useEventForm({ getInitial: () => event.value, onPartialSave: applyEvent })
@@ -109,6 +139,19 @@ async function loadParticipants(): Promise<void> {
   }
 }
 
+/** Свои отзывы — только записанному на начавшемся мероприятии. */
+async function loadMyReviews(): Promise<void> {
+  if (!event.value?.is_joined || !isPast.value) {
+    myReviews.value = null
+    return
+  }
+  try {
+    myReviews.value = await getMyReviews(eventId.value)
+  } catch {
+    myReviews.value = null
+  }
+}
+
 async function load(): Promise<void> {
   loadError.value = false
   try {
@@ -120,7 +163,7 @@ async function load(): Promise<void> {
     else loadError.value = true
     return
   }
-  await loadParticipants()
+  await Promise.all([loadParticipants(), loadMyReviews()])
 }
 
 watch(
@@ -212,6 +255,20 @@ async function remove() {
   } finally {
     busy.value = false
   }
+}
+
+function openReview(participant: Participant): void {
+  reviewTarget.value = participant
+  reviewDialogVisible.value = true
+}
+
+/** Отзыв сохранён или удалён: своя оценка сразу, рейтинги — перезапросом. */
+function onReviewChanged(review: Review, removed = false): void {
+  if (myReviews.value) {
+    const others = myReviews.value.items.filter((item) => item.id !== review.id)
+    myReviews.value = { ...myReviews.value, items: removed ? others : [...others, review] }
+  }
+  void load()
 }
 
 function confirmRemoveParticipant(participant: Participant) {
@@ -369,7 +426,24 @@ function confirmRemoveParticipant(participant: Participant) {
           :max="event.max_participants"
           :visible="canSeeParticipants"
           :can-remove="canManage"
+          :current-user-id="session.profile?.id ?? null"
+          :reviews="reviewsByTarget"
+          :can-review="canReview"
+          :review-hint="reviewHint"
           @remove="confirmRemoveParticipant"
+          @review="openReview"
+        />
+
+        <ReviewDialog
+          v-if="reviewTarget"
+          v-model:visible="reviewDialogVisible"
+          :event-id="event.id"
+          :target="reviewTarget"
+          :kind="reviewKind"
+          :review="reviewsByTarget[reviewTarget.id] ?? null"
+          @saved="onReviewChanged"
+          @deleted="onReviewChanged($event, true)"
+          @stale="load"
         />
       </template>
 

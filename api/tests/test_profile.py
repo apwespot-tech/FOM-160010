@@ -45,6 +45,10 @@ def test_get_own_profile(client: TestClient) -> None:
         "cover_id": None,
         "created_at": body["created_at"],
         "stats": {"organized_count": 0, "attended_count": 0},
+        "ratings": {
+            "as_organizer": {"average": None, "count": 0},
+            "as_participant": {"average": None, "count": 0},
+        },
         "roles": ["organizer", "participant"],
         "profile_completed": True,
     }

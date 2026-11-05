@@ -24,7 +24,9 @@ import {
   formatMinAge,
   formatPhone,
   formatPlaces,
+  formatRating,
   initials,
+  pluralReviews,
   telegramUrl,
 } from '@/utils/format'
 import {
@@ -66,6 +68,30 @@ describe('даты', () => {
     ['2026-02-28', '2012-02-28'],
   ])('maxBirthDate: сегодня %s -> %s (ровно 14 лет)', (today, expected) => {
     expect(toIsoDate(maxBirthDate(new Date(`${today}T15:00:00`)))).toBe(expected)
+  })
+})
+
+describe('рейтинг', () => {
+  it.each([
+    [4.8, '4,8'],
+    [5, '5,0'],
+    [4.25, '4,3'],
+    [1, '1,0'],
+  ])('formatRating(%s) = %s', (value, expected) => {
+    expect(formatRating(value)).toBe(expected)
+  })
+
+  it.each([
+    [0, '0 отзывов'],
+    [1, '1 отзыв'],
+    [3, '3 отзыва'],
+    [11, '11 отзывов'],
+    [12, '12 отзывов'],
+    [21, '21 отзыв'],
+    [22, '22 отзыва'],
+    [25, '25 отзывов'],
+  ])('pluralReviews(%s) = %s', (count, expected) => {
+    expect(pluralReviews(count)).toBe(expected)
   })
 })
 
