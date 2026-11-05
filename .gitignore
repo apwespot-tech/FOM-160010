@@ -1,0 +1,34 @@
+# Секреты
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+web/dist/
+*.local
+
+# Backend
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Данные
+*.sqlite
+*.dump
+*.sql.gz
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Claude Code: локальные настройки
+.claude/settings.local.json
