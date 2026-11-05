@@ -36,7 +36,7 @@ OPEN_TO_DRAFT = {
     ("GET", "/api/users/{user_id}/images/{image_id}"),
 }
 
-PARAM_VALUES = {"category_id": "1", "kind": "avatar"}
+PARAM_VALUES = {"category_id": "1", "city_id": "1", "kind": "avatar"}
 
 
 def all_endpoints(app: FastAPI) -> set[tuple[str, str]]:
@@ -72,3 +72,13 @@ def test_draft_access(app: FastAPI, client: TestClient) -> None:
     assert ("GET", "/api/events/{event_id}/participants") in denied
     assert ("PUT", "/api/profile/{kind}") in denied
     assert ("GET", "/api/profile/{user_id}") in denied
+    # Изменение справочников — только администратору, а он всегда с заполненным профилем
+    assert {
+        ("POST", "/api/categories"),
+        ("PATCH", "/api/categories/{category_id}"),
+        ("PUT", "/api/categories/{category_id}/cover"),
+        ("DELETE", "/api/categories/{category_id}"),
+        ("POST", "/api/cities"),
+        ("PATCH", "/api/cities/{city_id}"),
+        ("DELETE", "/api/cities/{city_id}"),
+    } <= denied

@@ -18,6 +18,7 @@ from app.schemas.profile import (
     ProfileUpdate,
 )
 from app.services.auth_service import lock_phone, revoke_pending_codes, revoke_user_refresh_tokens
+from app.services.dictionary_service import missing_reference_error
 
 MIN_BIRTH_DATE = date(1900, 1, 1)
 MIN_USER_AGE = 14
@@ -174,4 +175,8 @@ def _save(session: Session, *, commit: bool = True) -> None:
             raise AppError(409, "email_taken", "Этот email уже используется") from exc
         if constraint == PHONE_UNIQUE_CONSTRAINT:
             raise AppError(409, "phone_taken", "Этот телефон уже используется") from exc
+        # Город или категорию интереса удалили одновременно с сохранением профиля
+        missing = missing_reference_error(exc)
+        if missing is not None:
+            raise missing from exc
         raise

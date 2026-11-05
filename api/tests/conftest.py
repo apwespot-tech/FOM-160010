@@ -1,6 +1,6 @@
 import os
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -10,7 +10,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, text
+from sqlalchemy import Connection, Row, delete, text
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -80,17 +80,46 @@ def clock() -> FakeClock:
 def app(settings: Settings, clock: FakeClock) -> Iterator[FastAPI]:
     application = create_app(settings)
     application.state.clock = clock
+    # Справочники заполнены миграциями: запоминаем их, чтобы вернуть после правок администратора
+    with application.state.engine.connect() as conn:
+        seed_categories = conn.execute(text("SELECT id, name, icon FROM categories")).all()
+        seed_cities = conn.execute(text("SELECT id, name FROM cities")).all()
     yield application
     with application.state.engine.begin() as conn:
         conn.execute(
             text(
-                # categories не очищаем: справочник заполнен миграцией
                 "TRUNCATE event_photo_data, event_photos, event_participants, events, "
                 "user_interests, user_images, users, user_roles, auth_codes, refresh_tokens "
                 "RESTART IDENTITY CASCADE"
             )
         )
+        restore_dictionaries(conn, seed_categories, seed_cities)
     application.state.engine.dispose()
+
+
+def restore_dictionaries(
+    conn: Connection, categories: Sequence[Row], cities: Sequence[Row]
+) -> None:
+    """Удаляет созданные в тесте категории и города и возвращает названия засеянным."""
+    conn.execute(
+        text("DELETE FROM categories WHERE id <> ALL(:ids)"), {"ids": [c.id for c in categories]}
+    )
+    conn.execute(text("DELETE FROM cities WHERE id <> ALL(:ids)"), {"ids": [c.id for c in cities]})
+    # Временные названия снимают конфликты уникальности при обмене именами
+    conn.execute(text("UPDATE categories SET name = '~' || id"))
+    conn.execute(text("UPDATE cities SET name = '~' || id"))
+    for row in categories:
+        conn.execute(
+            text("UPDATE categories SET name = :name, icon = :icon WHERE id = :id"),
+            {"id": row.id, "name": row.name, "icon": row.icon},
+        )
+    for row in cities:
+        conn.execute(
+            text("UPDATE cities SET name = :name WHERE id = :id"), {"id": row.id, "name": row.name}
+        )
+    conn.execute(
+        text("DELETE FROM category_covers WHERE id NOT IN (SELECT cover_id FROM categories)")
+    )
 
 
 @pytest.fixture

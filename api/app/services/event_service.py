@@ -1,6 +1,7 @@
 import enum
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 
 from sqlalchemy import ColumnElement, Row, ScalarSelect, Select, delete, exists, func, select
@@ -12,6 +13,7 @@ from app.ages import calculate_age
 from app.errors import AppError, forbidden, not_found
 from app.models import Category, City, Event, EventParticipant, EventPhoto, User
 from app.schemas.event import EventCreate, EventUpdate, EventView, ParticipantOut
+from app.services.dictionary_service import missing_reference_error
 
 
 def event_not_found() -> AppError:
@@ -212,10 +214,11 @@ def create_event(session: Session, now: datetime, user: User, data: EventCreate)
     _ensure_city_exists(session, data.city_id)
     event = Event(organizer_id=user.id, created_at=now, **data.model_dump())
     session.add(event)
-    session.flush()
-    # Организатор сразу записан и занимает одно место
-    session.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=now))
-    session.commit()
+    with _missing_reference_as_not_found(session):
+        session.flush()
+        # Организатор сразу записан и занимает одно место
+        session.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=now))
+        session.commit()
     return event.id
 
 
@@ -246,7 +249,8 @@ def update_event(
 
     for field in fields:
         setattr(event, field, getattr(data, field))
-    session.commit()
+    with _missing_reference_as_not_found(session):
+        session.commit()
 
 
 def delete_event(session: Session, now: datetime, user: User, event_id: uuid.UUID) -> None:
@@ -352,6 +356,19 @@ def _ensure_not_started(event: Event, now: datetime) -> None:
 def _ensure_future(starts_at: datetime, now: datetime) -> None:
     if starts_at <= now:
         raise AppError(422, "starts_at_in_past", "Дата и время начала должны быть в будущем")
+
+
+@contextmanager
+def _missing_reference_as_not_found(session: Session) -> Iterator[None]:
+    """Категорию или город удалили между проверкой и записью: FK отклонил ссылку — 422."""
+    try:
+        yield
+    except IntegrityError as exc:
+        error = missing_reference_error(exc)
+        if error is None:
+            raise
+        session.rollback()
+        raise error from exc
 
 
 def _ensure_category_exists(session: Session, category_id: int) -> None:

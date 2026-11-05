@@ -236,8 +236,17 @@ def test_category_cover_cannot_be_deleted_while_used(db: Session) -> None:
 # --- города, картинки и интересы пользователей ---
 
 
-def test_city_name_is_unique(db: Session) -> None:
-    db.add(City(name="Москва"))
+@pytest.mark.parametrize("name", ["Москва", "москва", "МОСКВА"])
+def test_city_name_is_unique_case_insensitive(db: Session, name: str) -> None:
+    db.add(City(name=name))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+@pytest.mark.parametrize("name", ["Кино", "кино"])
+def test_category_name_is_unique_case_insensitive(db: Session, name: str) -> None:
+    cover = _cover(db)
+    db.add(Category(name=name, icon="pi-video", cover_id=cover.id))
     with pytest.raises(IntegrityError):
         db.commit()
 

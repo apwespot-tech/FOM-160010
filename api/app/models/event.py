@@ -30,6 +30,8 @@ PHOTO_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp")
 # Уменьшенные копии фото и картинок категорий — WebP не шире этого значения
 THUMB_WIDTH = 800
 ICON_PATTERN = "^pi-[a-z0-9-]+$"
+CATEGORY_NAME_MAX_LENGTH = 50
+CATEGORY_NAME_UNIQUE_INDEX = "uq_categories_name_lower"
 
 
 class CategoryCover(Base):
@@ -53,13 +55,17 @@ class CategoryCover(Base):
 
 
 class Category(Base):
-    """Справочник категорий; пополняется миграциями, каждая категория — с иконкой и картинкой."""
+    """Справочник категорий (миграции и администратор); у каждой — иконка и картинка."""
 
     __tablename__ = "categories"
-    __table_args__ = (CheckConstraint(f"icon ~ '{ICON_PATTERN}'", name="icon_format"),)
+    __table_args__ = (
+        CheckConstraint(f"icon ~ '{ICON_PATTERN}'", name="icon_format"),
+        # Название уникально без учёта регистра
+        Index(CATEGORY_NAME_UNIQUE_INDEX, func.lower(text("name")), unique=True),
+    )
 
     id: Mapped[int] = mapped_column(Integer, Identity(always=False), primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True)
+    name: Mapped[str] = mapped_column(String(CATEGORY_NAME_MAX_LENGTH))
     icon: Mapped[str] = mapped_column(String(40))
     cover_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("category_covers.id", ondelete="RESTRICT")
