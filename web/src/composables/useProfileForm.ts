@@ -12,7 +12,14 @@ import {
   type ProfilePatch,
 } from '@/api/profile'
 import { useSessionStore } from '@/stores/session'
-import { fromIsoDate, MIN_BIRTH_DATE, startOfToday, toIsoDate } from '@/utils/dates'
+import {
+  fromIsoDate,
+  maxBirthDate,
+  MIN_BIRTH_DATE,
+  MIN_USER_AGE,
+  startOfToday,
+  toIsoDate,
+} from '@/utils/dates'
 import { PHOTO_BAD_TYPE, PHOTO_TOO_LARGE, photoErrorMessage } from '@/utils/photos'
 
 export type ProfileField = 'name' | 'birthDate' | 'email' | 'telegram' | 'about' | 'cityId'
@@ -38,11 +45,12 @@ export type ImageDraft =
 /**
  * Состояние и логика формы профиля: валидация как на сервере, отправка только
  * изменённых полей, затем — если изменились — аватара и обложки, раскладка
- * серверных ошибок по полям. Используется онбордингом и страницей профиля.
+ * серверных ошибок по полям. Используется страницей профиля.
  */
 export function useProfileForm(getInitial: () => Profile) {
   const session = useSessionStore()
-  const maxDate = startOfToday()
+  const today = startOfToday()
+  const maxDate = maxBirthDate()
 
   const form = reactive({
     name: '',
@@ -101,7 +109,11 @@ export function useProfileForm(getInitial: () => Profile) {
       }
       case 'birthDate':
         if (!form.birthDate) return 'Укажите дату рождения'
-        if (form.birthDate > maxDate) return 'Дата рождения не может быть в будущем'
+        if (form.birthDate > today) return 'Дата рождения не может быть в будущем'
+        // Сохранённую до ограничения дату не проверяем: в PATCH она не уходит
+        if (form.birthDate > maxDate && toIsoDate(form.birthDate) !== getInitial().birth_date) {
+          return `Сервисом можно пользоваться с ${MIN_USER_AGE} лет`
+        }
         if (form.birthDate < MIN_BIRTH_DATE) return 'Дата рождения не раньше 01.01.1900'
         return null
       case 'email':

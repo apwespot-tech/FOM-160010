@@ -93,7 +93,7 @@ def test_cover_invalid_size(client: TestClient) -> None:
     assert cover(client, user, cinema["id"], cinema["cover_id"], size="huge").status_code == 422
 
 
-def test_cover_requires_token_and_completed_profile(client: TestClient) -> None:
+def test_cover_requires_token_but_not_completed_profile(client: TestClient) -> None:
     user = register(client, PHONE)
     cinema = categories(client, user)[3]
     draft = login(client, "+79991234568")
@@ -101,17 +101,17 @@ def test_cover_requires_token_and_completed_profile(client: TestClient) -> None:
 
     assert client.get(path).status_code == 401
     response = client.get(path, headers=auth_header(draft))
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "profile_incomplete"
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
 
 
-def test_categories_require_completed_profile(client: TestClient) -> None:
+def test_draft_gets_categories(client: TestClient) -> None:
     draft = login(client, PHONE)
 
     response = client.get("/api/categories", headers=auth_header(draft))
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "profile_incomplete"
+    assert response.status_code == 200
+    assert {"Настольные игры", "Прогулки", "Спорт", "Кино"} <= {c["name"] for c in response.json()}
 
 
 def test_categories_require_token(client: TestClient) -> None:

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Шапка: логотип и «Мероприятия» ведут на главную; для заполненного профиля —
+ * Шапка: логотип и «Мероприятия» ведут на главную; для авторизованного пользователя —
  * «Создать мероприятие», уведомления и меню профиля. На мобильной ширине — иконки.
+ * С незаполненным профилем «Создать мероприятие» просит сначала заполнить профиль.
  */
 import Button from 'primevue/button'
 import { RouterLink } from 'vue-router'
@@ -9,12 +10,18 @@ import { RouterLink } from 'vue-router'
 import NotificationsButton from '@/components/NotificationsButton.vue'
 import ProfileMenu from '@/components/ProfileMenu.vue'
 import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
+import { useRequireCompletedProfile } from '@/composables/useRequireCompletedProfile'
 import { useSessionStore } from '@/stores/session'
 import { useIsMobile } from '@/utils/breakpoints'
 
 const session = useSessionStore()
 const isMobile = useIsMobile()
-const { open: openCreate } = useCreateEventDialog()
+const { open } = useCreateEventDialog()
+const requireCompletedProfile = useRequireCompletedProfile()
+
+function openCreate(): void {
+  if (requireCompletedProfile()) open()
+}
 </script>
 
 <template>
@@ -25,7 +32,7 @@ const { open: openCreate } = useCreateEventDialog()
           <i class="pi pi-users app-header__logo" aria-hidden="true" />
           <span class="app-header__brand-text">Ищу компанию</span>
         </RouterLink>
-        <nav v-if="session.isProfileCompleted && !isMobile" class="app-header__nav">
+        <nav v-if="session.isAuthenticated && !isMobile" class="app-header__nav">
           <RouterLink
             to="/"
             class="app-header__link"
@@ -37,7 +44,7 @@ const { open: openCreate } = useCreateEventDialog()
         </nav>
       </div>
 
-      <div v-if="session.isProfileCompleted" class="app-header__actions">
+      <div v-if="session.isAuthenticated" class="app-header__actions">
         <Button
           type="button"
           icon="pi pi-plus"

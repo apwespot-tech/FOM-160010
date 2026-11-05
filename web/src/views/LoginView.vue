@@ -30,7 +30,7 @@ function onResent(deadline: number) {
 
 async function onVerified(tokens: TokenPair) {
   await session.login(tokens)
-  await router.replace(session.isProfileCompleted ? '/' : '/onboarding')
+  await router.replace('/')
 }
 </script>
 

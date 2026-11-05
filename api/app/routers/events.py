@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 from pydantic import AwareDatetime
 
-from app.deps import CompletedUser, NowDep, OrganizerUser, ParticipantUser, SessionDep
+from app.deps import CompletedUser, CurrentUser, NowDep, OrganizerUser, ParticipantUser, SessionDep
 from app.models.event import MAX_PARTICIPANTS, PHOTO_CONTENT_TYPES
 from app.schemas.event import EventCreate, EventOut, EventPage, EventUpdate, ParticipantOut
 from app.services import event_service, photo_service
@@ -24,7 +24,7 @@ PHOTO_HEADERS = {
 
 @router.get("")
 def list_events(
-    user: CompletedUser,
+    user: CurrentUser,
     session: SessionDep,
     now: NowDep,
     scope: EventScope = EventScope.ALL,
@@ -63,7 +63,7 @@ def create_event(
 
 
 @router.get("/{event_id}")
-def get_event(event_id: uuid.UUID, user: CompletedUser, session: SessionDep) -> EventOut:
+def get_event(event_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> EventOut:
     return EventOut.from_view(event_service.get_event_view(session, user, event_id))
 
 
@@ -91,7 +91,7 @@ def delete_event(
 def get_photo(
     event_id: uuid.UUID,
     photo_id: uuid.UUID,
-    user: CompletedUser,
+    user: CurrentUser,
     session: SessionDep,
     size: PhotoSize = PhotoSize.FULL,
 ) -> Response:

@@ -246,6 +246,18 @@ def test_age_filter_not_applied_to_own_events(client: TestClient) -> None:
     assert ids(catalog(client, teen)) == []
 
 
+def test_age_filter_skipped_without_birth_date(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    events = [create_event(client, organizer, min_age=age)["id"] for age in (0, 18)]
+    draft = login(client, OTHER)
+
+    response = catalog(client, draft)
+
+    assert response.status_code == 200
+    assert sorted(ids(response)) == sorted(events)
+    assert response.json()["total"] == 2
+
+
 # --- свободные места ---
 
 

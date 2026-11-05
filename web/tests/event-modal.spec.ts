@@ -10,6 +10,7 @@ import {
   categories,
   cities,
   completeProfile,
+  draftProfile,
   errorResponse,
   eventItem,
   jsonResponse,
@@ -255,6 +256,28 @@ describe('Запись и отказ', () => {
 
     expect((find('join') as HTMLButtonElement).disabled).toBe(true)
     expect(text('join-blocked')).toBe('Доступно с 18 лет')
+  })
+
+  it('незаполненный профиль: запись не отправляется, уведомление', async () => {
+    const { api } = await openEvent(eventItem({ min_age: 18 }), {}, draftProfile)
+
+    expect((find('join') as HTMLButtonElement).disabled).toBe(false)
+    expect(exists('join-blocked')).toBe(false)
+    await click('join')
+
+    expect(api.calls('POST /events/e1/join')).toHaveLength(0)
+    expect(toasts()).toContain('Сначала заполните профиль')
+    expect(exists('join')).toBe(true)
+  })
+
+  it('ответ profile_incomplete показывается тем же уведомлением', async () => {
+    await openEvent(eventItem(), {
+      'POST /events/e1/join': () => errorResponse(403, 'profile_incomplete'),
+    })
+
+    await click('join')
+
+    expect(toasts()).toContain('Сначала заполните профиль')
   })
 
   it('место заняли раньше', async () => {

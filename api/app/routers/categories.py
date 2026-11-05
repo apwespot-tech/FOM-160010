@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Response
 
-from app.deps import CompletedUser, SessionDep
+from app.deps import CurrentUser, SessionDep
 from app.models.event import PHOTO_CONTENT_TYPES
 from app.routers.events import PHOTO_HEADERS
 from app.schemas.event import CategoryOut
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/categories", tags=["events"])
 
 
 @router.get("")
-def list_categories(_: CompletedUser, session: SessionDep) -> list[CategoryOut]:
+def list_categories(_: CurrentUser, session: SessionDep) -> list[CategoryOut]:
     return [CategoryOut.model_validate(c) for c in event_service.list_categories(session)]
 
 
@@ -25,7 +25,7 @@ def list_categories(_: CompletedUser, session: SessionDep) -> list[CategoryOut]:
 def get_category_cover(
     category_id: int,
     cover_id: uuid.UUID,
-    _: CompletedUser,
+    _: CurrentUser,
     session: SessionDep,
     size: PhotoSize = PhotoSize.FULL,
 ) -> Response:

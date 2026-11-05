@@ -1,15 +1,16 @@
 """Участие: запись, возраст, лимит, отказ, удаление участника, список, доступ."""
 
 import threading
-from datetime import timedelta
+import uuid
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import EventParticipant, Role
+from app.models import EventParticipant, Role, User
 from tests.conftest import (
     ADMIN_PHONE,
     START,
@@ -150,9 +151,14 @@ def test_age_is_checked_on_today_not_on_event_date(client: TestClient) -> None:
     assert error_code(response) == "age_restricted"
 
 
-def test_no_age_restriction(client: TestClient) -> None:
+def test_no_age_restriction(client: TestClient, db: Session) -> None:
     organizer = register(client, ORGANIZER)
-    child = register(client, OTHER, birth_date="2020-01-01")
+    child = register(client, OTHER)
+    # Профиль младше 14, сохранённый до появления ограничения
+    db.execute(
+        update(User).where(User.id == uuid.UUID(child["id"])).values(birth_date=date(2020, 1, 1))
+    )
+    db.commit()
     event = create_event(client, organizer, min_age=0)
 
     assert join(client, child, event["id"]).status_code == 200
@@ -495,7 +501,12 @@ def test_requires_token(client: TestClient, method: str, path: str) -> None:
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize(("method", "path"), ENDPOINTS)
+# Просмотр доступен черновику; остальные ручки мероприятий требуют заполненного профиля
+VIEW_ENDPOINTS = {("GET", "/api/events"), ("GET", "/api/events/{id}")}
+ACTION_ENDPOINTS = [endpoint for endpoint in ENDPOINTS if endpoint not in VIEW_ENDPOINTS]
+
+
+@pytest.mark.parametrize(("method", "path"), ACTION_ENDPOINTS)
 def test_requires_completed_profile(client: TestClient, method: str, path: str) -> None:
     draft = login(client, OTHER)
     response = client.request(

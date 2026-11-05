@@ -144,6 +144,19 @@ def test_organizer_avatar_visible_to_outsider(client: TestClient) -> None:
         assert small.size[0] <= 800
 
 
+def test_draft_sees_organizer_avatar(client: TestClient) -> None:
+    anna = register(client, ANNA)
+    avatar_id = upload_avatar(client, anna)
+    event = create_event(client, anna)
+    draft = login(client, BORIS)
+    organizer = client.get(f"/api/events/{event['id']}", headers=auth_header(draft)).json()[
+        "organizer"
+    ]
+
+    assert organizer["avatar_id"] == avatar_id
+    assert image(client, draft, anna["id"], avatar_id).status_code == 200
+
+
 def test_image_of_other_user_and_access(client: TestClient) -> None:
     anna = register(client, ANNA)
     boris = register(client, BORIS)

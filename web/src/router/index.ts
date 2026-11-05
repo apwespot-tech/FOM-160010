@@ -9,12 +9,8 @@ import { useSessionStore } from '@/stores/session'
 
 declare module 'vue-router' {
   interface RouteMeta {
-    /** Только для гостей */
+    /** Только для гостей; остальные страницы — для любого авторизованного пользователя */
     guest?: boolean
-    /** Только для пользователей с незаполненным профилем */
-    incomplete?: boolean
-    /** Только для пользователей с заполненным профилем */
-    complete?: boolean
   }
 }
 
@@ -26,17 +22,10 @@ export const routes = [
     meta: { guest: true },
   },
   {
-    path: '/onboarding',
-    name: 'onboarding',
-    component: () => import('@/views/OnboardingView.vue'),
-    meta: { incomplete: true },
-  },
-  {
     // Короткий адрес своего профиля: гард уже загрузил сессию
     path: '/profile',
     name: 'profile',
     component: () => import('@/views/UserProfileView.vue'),
-    meta: { complete: true },
     beforeEnter: () => {
       const session = useSessionStore()
       return session.profile ? `/users/${session.profile.id}` : '/'
@@ -46,33 +35,30 @@ export const routes = [
     path: '/users/:id',
     name: 'user',
     component: () => import('@/views/UserProfileView.vue'),
-    meta: { complete: true },
   },
   {
     path: '/',
     name: 'events',
     component: () => import('@/views/EventsView.vue'),
-    meta: { complete: true },
     // Мероприятие открывается окном поверх списка: список остаётся смонтированным
     children: [
       {
         path: 'events/:id',
         name: 'event',
         component: () => import('@/views/EventModal.vue'),
-        meta: { complete: true },
       },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
-type SessionState = { isAuthenticated: boolean; isProfileCompleted: boolean }
+type SessionState = { isAuthenticated: boolean }
 
 /** Куда перенаправить; null — доступ разрешён. */
 export function resolveRedirect(to: RouteLocationNormalized, session: SessionState): string | null {
   if (!session.isAuthenticated) return to.meta.guest ? null : '/login'
-  if (!session.isProfileCompleted) return to.meta.incomplete ? null : '/onboarding'
-  return to.meta.complete ? null : '/'
+  // Незаполненный профиль не ограничивает страницы: профиль просят заполнить при действиях
+  return to.meta.guest ? '/' : null
 }
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {

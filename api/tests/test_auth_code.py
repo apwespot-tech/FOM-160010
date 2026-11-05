@@ -1,5 +1,7 @@
 """Требования: запрос кода, ограничение частоты, тестовая ручка."""
 
+import threading
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -73,6 +75,56 @@ def test_repeat_request_exactly_after_cooldown(client: TestClient, clock: FakeCl
     clock.advance(60)
 
     assert client.post("/api/auth/code", json={"phone": PHONE}).status_code == 200
+
+
+def verify(client: TestClient, code: str) -> int:
+    return client.post("/api/auth/verify", json={"phone": PHONE, "code": code}).status_code
+
+
+def test_verified_code_does_not_block_new_request(client: TestClient, clock: FakeClock) -> None:
+    client.post("/api/auth/code", json={"phone": PHONE})
+    first = get_code(client, PHONE)
+    assert verify(client, first) == 200
+    clock.advance(20)
+
+    response = client.post("/api/auth/code", json={"phone": PHONE})
+
+    assert response.status_code == 200
+    second = get_code(client, PHONE)
+    assert verify(client, second) == 200
+
+
+def test_exhausted_code_still_blocks(client: TestClient, clock: FakeClock) -> None:
+    client.post("/api/auth/code", json={"phone": PHONE})
+    wrong = "000000" if get_code(client, PHONE) != "000000" else "111111"
+    for _ in range(5):
+        assert verify(client, wrong) == 400
+    clock.advance(30)
+
+    response = client.post("/api/auth/code", json={"phone": PHONE})
+
+    assert response.status_code == 429
+    assert response.json()["detail"]["retry_after"] == 30
+
+
+def test_concurrent_requests_after_login(client: TestClient, clock: FakeClock) -> None:
+    client.post("/api/auth/code", json={"phone": PHONE})
+    assert verify(client, get_code(client, PHONE)) == 200
+    clock.advance(5)
+    barrier = threading.Barrier(2)
+    statuses: list[int] = []
+
+    def worker() -> None:
+        barrier.wait()
+        statuses.append(client.post("/api/auth/code", json={"phone": PHONE}).status_code)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(statuses) == [200, 429]
 
 
 def test_cooldown_is_per_phone(client: TestClient) -> None:

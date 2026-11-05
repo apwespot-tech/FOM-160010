@@ -12,7 +12,7 @@ Vue 3 + TypeScript + Vite · Python (FastAPI) · PostgreSQL · Docker Compose.
 
 ## Запуск
 
-Требования: Docker и Docker Compose v2. Сейчас готовы вход, онбординг и профиль.
+Требования: Docker и Docker Compose v2. Сейчас готовы вход, профиль и мероприятия.
 
 ```bash
 cp .env.example .env

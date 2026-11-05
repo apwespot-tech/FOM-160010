@@ -51,9 +51,12 @@ def request_code(session: Session, settings: Settings, now: datetime, phone: str
     """Создаёт новый код для номера и возвращает срок его действия в секундах."""
     lock_phone(session, phone)
 
+    # Пауза — от последнего непроверенного кода: успешный вход не мешает войти снова.
+    # Отменённые, истёкшие и исчерпавшие попытки коды учитываются — иначе паузу обходили бы
+    # неверным вводом.
     last_created_at = session.scalar(
         select(AuthCode.created_at)
-        .where(AuthCode.phone == phone)
+        .where(AuthCode.phone == phone, AuthCode.used_at.is_(None))
         .order_by(AuthCode.created_at.desc())
         .limit(1)
     )

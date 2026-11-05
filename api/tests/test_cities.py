@@ -36,8 +36,8 @@ def test_cities_access(client: TestClient) -> None:
 
     assert client.get("/api/cities").status_code == 401
     response = client.get("/api/cities", headers=auth_header(draft))
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "profile_incomplete"
+    assert response.status_code == 200
+    assert "Москва" in {c["name"] for c in response.json()}
 
 
 def test_event_requires_existing_city(client: TestClient) -> None:

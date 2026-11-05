@@ -5,6 +5,7 @@ from sqlalchemy import delete, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
+from app.ages import latest_birth_date
 from app.errors import AppError, forbidden, not_found
 from app.models import Category, City, Event, EventParticipant, User, UserInterest
 from app.models.user import EMAIL_UNIQUE_INDEX, PHONE_UNIQUE_CONSTRAINT
@@ -19,6 +20,7 @@ from app.schemas.profile import (
 from app.services.auth_service import lock_phone, revoke_pending_codes, revoke_user_refresh_tokens
 
 MIN_BIRTH_DATE = date(1900, 1, 1)
+MIN_USER_AGE = 14
 
 
 def get_profile_for(session: Session, viewer: User, user_id: uuid.UUID) -> User:
@@ -151,6 +153,10 @@ def _validate_birth_date(birth_date: date, today: date) -> None:
             422,
             "invalid_birth_date",
             f"Дата рождения должна быть между {MIN_BIRTH_DATE.isoformat()} и текущей датой",
+        )
+    if birth_date > latest_birth_date(today, MIN_USER_AGE):
+        raise AppError(
+            422, "invalid_birth_date", f"Сервисом можно пользоваться с {MIN_USER_AGE} лет"
         )
 
 

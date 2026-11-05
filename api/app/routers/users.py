@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Response
 
-from app.deps import CompletedUser, SessionDep
+from app.deps import CurrentUser, SessionDep
 from app.models.event import PHOTO_CONTENT_TYPES
 from app.routers.events import PHOTO_HEADERS
 from app.services import profile_image_service
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/users", tags=["profile"])
 def get_user_image(
     user_id: uuid.UUID,
     image_id: uuid.UUID,
-    _: CompletedUser,
+    _: CurrentUser,
     session: SessionDep,
     size: PhotoSize = PhotoSize.FULL,
 ) -> Response:

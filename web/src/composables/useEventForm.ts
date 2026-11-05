@@ -10,6 +10,7 @@ import {
   type EventPatch,
   type MinAge,
 } from '@/api/events'
+import { PROFILE_REQUIRED_MESSAGE } from '@/composables/useRequireCompletedProfile'
 import { toOffsetIso } from '@/utils/dates'
 import {
   buildPhotoPayload,
@@ -80,6 +81,8 @@ export function eventErrorMessage(error: unknown, minAge?: number): string {
       return 'Вы не записаны на это мероприятие'
     case 'forbidden':
       return 'Недостаточно прав'
+    case 'profile_incomplete':
+      return PROFILE_REQUIRED_MESSAGE
     case NETWORK_ERROR:
       return 'Нет связи с сервером'
   }

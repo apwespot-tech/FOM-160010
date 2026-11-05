@@ -161,15 +161,15 @@ def test_get_photo_requires_token(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_get_photo_requires_completed_profile(client: TestClient) -> None:
+def test_draft_gets_photo(client: TestClient) -> None:
     organizer = register(client, ORGANIZER)
     event = event_with_photos(client, organizer, 1)
     draft = login(client, OTHER)
 
     response = get_photo(client, draft, event["id"], photo_ids(event)[0])
 
-    assert response.status_code == 403
-    assert error_code(response) == "profile_incomplete"
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/")
 
 
 # --- замена набора ---

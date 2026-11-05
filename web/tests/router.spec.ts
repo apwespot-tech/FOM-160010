@@ -10,7 +10,7 @@ async function currentPath(path: string) {
 
 describe('Доступ к страницам', () => {
   describe('гость', () => {
-    it.each(['/profile', '/users/u2', '/onboarding', '/', '/events/e1', '/unknown/page'])(
+    it.each(['/profile', '/users/u2', '/', '/events/e1', '/unknown/page'])(
       '%s -> /login',
       async (path) => {
         mockApi()
@@ -25,14 +25,19 @@ describe('Доступ к страницам', () => {
   })
 
   describe('незаполненный профиль', () => {
-    it.each(['/profile', '/login', '/', '/unknown'])('%s -> /onboarding', async (path) => {
+    it.each(['/', '/events/e1'])('%s доступен', async (path) => {
       withStoredSession(mockApi(), draftProfile)
-      expect(await currentPath(path)).toBe('/onboarding')
+      expect(await currentPath(path)).toBe(path)
     })
 
-    it('/onboarding доступен', async () => {
+    it.each(['/login', '/onboarding', '/unknown'])('%s -> /', async (path) => {
       withStoredSession(mockApi(), draftProfile)
-      expect(await currentPath('/onboarding')).toBe('/onboarding')
+      expect(await currentPath(path)).toBe('/')
+    })
+
+    it('/profile -> /users/<свой id>', async () => {
+      withStoredSession(mockApi(), draftProfile)
+      expect(await currentPath('/profile')).toBe(`/users/${draftProfile.id}`)
     })
   })
 

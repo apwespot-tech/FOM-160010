@@ -71,11 +71,29 @@ describe('Шапка приложения', () => {
     expect(wrapper.find('[data-testid="notifications-button"]').exists()).toBe(false)
   })
 
-  it('незаполненный профиль — только логотип', async () => {
+  it('незаполненный профиль — полная шапка, иконка вместо инициалов', async () => {
     withStoredSession(mockApi(), draftProfile)
-    const { wrapper } = await renderApp('/onboarding')
+    const { wrapper } = await renderApp(`/users/${draftProfile.id}`)
 
-    expect(wrapper.find('[data-testid="profile-menu-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="nav-events"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="create-event"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="notifications-button"]').exists()).toBe(true)
+    const menuButton = wrapper.get('[data-testid="profile-menu-button"]')
+    expect(menuButton.find('.pi-user').exists()).toBe(true)
+    expect(menuButton.text()).toBe('')
+  })
+
+  it('незаполненный профиль: «Создать мероприятие» — уведомление без окна', async () => {
+    withStoredSession(mockApi(), draftProfile)
+    const { wrapper } = await renderApp(`/users/${draftProfile.id}`)
+
+    await wrapper.get('[data-testid="create-event"]').trigger('click')
+    await settle()
+
+    expect(document.body.querySelector('[data-testid="create-event-dialog"]')).toBeNull()
+    expect(document.body.querySelector('.p-toast')?.textContent).toContain(
+      'Сначала заполните профиль',
+    )
   })
 
   it('«Создать мероприятие» открывает окно создания', async () => {
@@ -105,6 +123,17 @@ describe('Меню профиля', () => {
     bodyGet('[data-testid="menu-profile"]').click()
     await waitForPath(router, `/users/${completeProfile.id}`)
     expect(document.body.querySelector('[data-testid="profile-menu-header"]')).toBeNull()
+  })
+
+  it('без имени в меню только телефон', async () => {
+    withStoredSession(mockApi(), draftProfile)
+    const { wrapper } = await renderApp(`/users/${draftProfile.id}`)
+
+    await wrapper.get('[data-testid="profile-menu-button"]').trigger('click')
+    await settle()
+
+    expect(document.body.querySelector('.profile-menu__name')).toBeNull()
+    expect(bodyGet('[data-testid="profile-menu-header"]').textContent).toContain('+7 999 123-45-67')
   })
 
   it('Esc закрывает меню без перехода', async () => {

@@ -7,7 +7,7 @@ import jwt
 import pytest
 from pydantic import ValidationError
 
-from app.ages import calculate_age
+from app.ages import calculate_age, latest_birth_date
 from app.config import Settings
 from app.phones import normalize_phone
 from app.schemas.event import EventCreate, EventUpdate
@@ -221,3 +221,17 @@ def test_event_update_allows_clearing_only_duration() -> None:
         EventUpdate.model_validate({"title": None})
     with pytest.raises(ValidationError):
         EventUpdate.model_validate({"id": str(uuid.uuid4())})
+
+
+@pytest.mark.parametrize(
+    ("today", "expected"),
+    [
+        (date(2026, 11, 5), date(2012, 11, 5)),
+        (date(2028, 2, 29), date(2014, 2, 28)),
+        (date(2026, 2, 28), date(2012, 2, 28)),
+    ],
+)
+def test_latest_birth_date_for_14(today: date, expected: date) -> None:
+    assert latest_birth_date(today, 14) == expected
+    assert calculate_age(expected, today) == 14
+    assert calculate_age(expected + timedelta(days=1), today) == 13

@@ -35,6 +35,7 @@ import OrganizerCard from '@/components/OrganizerCard.vue'
 import { provideEventForm } from '@/composables/eventFormContext'
 import { injectEventListUpdates } from '@/composables/useEventList'
 import { eventErrorMessage, useEventForm } from '@/composables/useEventForm'
+import { useRequireCompletedProfile } from '@/composables/useRequireCompletedProfile'
 import { useSessionStore } from '@/stores/session'
 import { useIsMobile } from '@/utils/breakpoints'
 import { formatDuration, formatEventDay } from '@/utils/dates'
@@ -44,6 +45,7 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const toast = useToast()
+const requireCompletedProfile = useRequireCompletedProfile()
 const confirm = useConfirm()
 const isMobile = useIsMobile()
 const list = injectEventListUpdates()
@@ -65,7 +67,9 @@ const ageLimit = computed(() => event.value?.min_age ?? 0)
 const joinBlockedReason = computed(() => {
   if (!event.value) return null
   if (event.value.is_full) return 'Мест нет'
-  if ((session.profile?.age ?? 0) < ageLimit.value) return `Доступно с ${ageLimit.value} лет`
+  // Без даты рождения возраст неизвестен: запись попросит сначала заполнить профиль
+  const age = session.profile?.age ?? null
+  if (age !== null && age < ageLimit.value) return `Доступно с ${ageLimit.value} лет`
   return null
 })
 const when = computed(() => (event.value ? formatEventDay(event.value.starts_at) : null))
@@ -148,6 +152,7 @@ async function act(action: () => Promise<EventItem>, success: string): Promise<v
 }
 
 function join() {
+  if (!requireCompletedProfile()) return
   return act(() => joinEvent(eventId.value), 'Вы записаны')
 }
 

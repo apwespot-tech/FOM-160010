@@ -32,7 +32,7 @@ watch(
 
   <RouterView />
 
-  <CreateEventDialog v-if="session.isProfileCompleted" />
+  <CreateEventDialog v-if="session.isAuthenticated" />
   <ConfirmDialog :class="{ 'app-confirm--mobile': isMobile }" />
   <Toast :position="isMobile ? 'top-center' : 'top-right'" />
 </template>

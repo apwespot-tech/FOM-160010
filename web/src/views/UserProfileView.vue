@@ -2,7 +2,8 @@
 /**
  * Профиль пользователя (/users/:id) — одна страница для своего и чужого профиля.
  * Чужой профиль виден участникам общих мероприятий (проверяет сервер), без доступа —
- * «Профиль недоступен». На своём профиле «Редактировать» перестраивает страницу в форму.
+ * «Профиль недоступен». На своём профиле «Редактировать» перестраивает страницу в форму,
+ * а незаданные поля показываются заглушками, которые тоже открывают редактирование.
  */
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -39,6 +40,8 @@ const editing = ref(false)
 
 /** Свой профиль — из сессии (обновляется после сохранения), чужой — отдельным запросом. */
 const profile = computed<Profile | null>(() => (isOwn.value ? session.profile : other.value))
+/** Заглушки незаданных полей — только на своём профиле в режиме просмотра. */
+const showPlaceholders = computed(() => isOwn.value && !editing.value)
 
 async function load(): Promise<void> {
   unavailable.value = false
@@ -157,10 +160,35 @@ async function share(): Promise<void> {
                 Редактирование профиля
               </h1>
               <template v-else>
-                <h1 class="profile-hero__name app-break" data-testid="profile-name">
+                <h1
+                  v-if="profile.name || !showPlaceholders"
+                  class="profile-hero__name app-break"
+                  data-testid="profile-name"
+                >
                   {{ profile.name }}
                 </h1>
+                <template v-else>
+                  <h1 class="profile-hero__sr">Мой профиль</h1>
+                  <button
+                    type="button"
+                    class="profile-placeholder profile-placeholder--name"
+                    data-testid="placeholder-name"
+                    @click="startEdit"
+                  >
+                    Укажите имя
+                  </button>
+                </template>
+                <button
+                  v-if="!profile.telegram && showPlaceholders"
+                  type="button"
+                  class="profile-placeholder"
+                  data-testid="placeholder-telegram"
+                  @click="startEdit"
+                >
+                  Добавьте Telegram
+                </button>
                 <span
+                  v-else
                   class="profile-hero__telegram app-break"
                   :class="{ 'profile-hero__empty': !profile.telegram }"
                   data-testid="profile-telegram"
@@ -222,8 +250,28 @@ async function share(): Promise<void> {
               <p v-if="profile.about" class="profile-hero__about-text" data-testid="profile-about">
                 {{ profile.about }}
               </p>
+              <button
+                v-else-if="showPlaceholders"
+                type="button"
+                class="profile-placeholder profile-placeholder--box"
+                data-testid="placeholder-about"
+                @click="startEdit"
+              >
+                <i class="pi pi-pencil" aria-hidden="true" />
+                <span>Расскажите о себе</span>
+              </button>
+              <button
+                v-if="!profile.interests.length && showPlaceholders"
+                type="button"
+                class="profile-placeholder profile-placeholder--box"
+                data-testid="placeholder-interests"
+                @click="startEdit"
+              >
+                <i class="pi pi-tags" aria-hidden="true" />
+                <span>Добавьте интересы</span>
+              </button>
               <div
-                v-if="profile.interests.length"
+                v-else-if="profile.interests.length"
                 class="profile-hero__interests"
                 data-testid="profile-interests"
               >
@@ -239,7 +287,21 @@ async function share(): Promise<void> {
             <dl class="profile-hero__facts">
               <div class="profile-hero__fact">
                 <dt><i class="pi pi-map-marker" aria-hidden="true" /><span>Город</span></dt>
-                <dd :class="{ 'profile-hero__empty': !profile.city }" data-testid="profile-city">
+                <dd v-if="!profile.city && showPlaceholders">
+                  <button
+                    type="button"
+                    class="profile-placeholder"
+                    data-testid="placeholder-city"
+                    @click="startEdit"
+                  >
+                    Укажите город
+                  </button>
+                </dd>
+                <dd
+                  v-else
+                  :class="{ 'profile-hero__empty': !profile.city }"
+                  data-testid="profile-city"
+                >
                   {{ profile.city?.name ?? NOT_SET }}
                 </dd>
               </div>
@@ -253,7 +315,17 @@ async function share(): Promise<void> {
               </div>
               <div class="profile-hero__fact">
                 <dt><i class="pi pi-gift" aria-hidden="true" /><span>Дата рождения</span></dt>
-                <dd>
+                <dd v-if="!profile.birth_date && showPlaceholders">
+                  <button
+                    type="button"
+                    class="profile-placeholder"
+                    data-testid="placeholder-birth-date"
+                    @click="startEdit"
+                  >
+                    Укажите дату рождения
+                  </button>
+                </dd>
+                <dd v-else>
                   <span
                     :class="{ 'profile-hero__empty': !profile.birth_date }"
                     data-testid="profile-birth-date"
@@ -277,7 +349,18 @@ async function share(): Promise<void> {
               </div>
               <div class="profile-hero__fact">
                 <dt><i class="pi pi-envelope" aria-hidden="true" /><span>Email</span></dt>
+                <dd v-if="!profile.email && showPlaceholders">
+                  <button
+                    type="button"
+                    class="profile-placeholder"
+                    data-testid="placeholder-email"
+                    @click="startEdit"
+                  >
+                    Добавьте email
+                  </button>
+                </dd>
                 <dd
+                  v-else
                   class="app-break"
                   :class="{ 'profile-hero__empty': !profile.email }"
                   data-testid="profile-email"
@@ -449,6 +532,58 @@ async function share(): Promise<void> {
     padding-left: 24px;
     border-left: 1px solid var(--app-border);
   }
+
+  /*
+   * Шапка — сетка с правой колонкой той же ширины, что колонка фактов в теле (320 px у правого
+   * края при тех же боковых отступах): левый край кнопок совпадает с чертой колонки.
+   */
+  .profile-hero:not(.profile-hero--editing) .profile-hero__head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 320px;
+  }
+}
+
+.profile-placeholder {
+  min-height: var(--app-touch-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-placeholder:hover {
+  color: var(--p-primary-600);
+}
+
+.profile-placeholder:focus-visible {
+  outline: 2px solid var(--p-primary-600);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.profile-placeholder--name {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.profile-placeholder--box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 1px dashed var(--app-border);
+  border-radius: 12px;
+  font-style: normal;
+}
+
+.profile-placeholder--box .pi {
+  color: var(--p-primary-600);
 }
 
 .profile-hero__about {

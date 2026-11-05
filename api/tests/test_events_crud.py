@@ -15,6 +15,7 @@ from tests.conftest import (
     create_event,
     event_payload,
     join,
+    login,
     register,
     set_roles,
     upload_avatar,
@@ -191,6 +192,19 @@ def test_organizer_telegram_hidden_from_outsider(client: TestClient) -> None:
     assert "email" not in body["organizer"]
     catalog_item = client.get("/api/events", headers=auth_header(outsider)).json()["items"][0]
     assert catalog_item["organizer"]["telegram"] is None
+
+
+def test_draft_views_event(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER, telegram="@anna_org")
+    event = create_event(client, organizer)
+    draft = login(client, OTHER)
+
+    response = get_event(client, draft, event["id"])
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_joined"] is False
+    assert body["organizer"]["telegram"] is None
 
 
 def test_organizer_telegram_for_participant_and_admin(client: TestClient) -> None:

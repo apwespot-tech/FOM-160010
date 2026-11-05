@@ -1,5 +1,7 @@
 <script setup lang="ts">
-/** Кнопка с инициалами и выпадающее меню: имя и телефон, «Профиль», «Выйти». */
+/**
+ * Кнопка с инициалами (без имени — иконка) и выпадающее меню: имя и телефон, «Профиль», «Выйти».
+ */
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
@@ -42,7 +44,8 @@ function toggle(event: Event) {
 <template>
   <Button
     type="button"
-    :label="initials(name)"
+    :label="initials(name) || undefined"
+    :icon="initials(name) ? undefined : 'pi pi-user'"
     severity="secondary"
     aria-label="Меню профиля"
     aria-haspopup="true"
@@ -54,7 +57,7 @@ function toggle(event: Event) {
   <Menu id="profile-menu" ref="menu" :model="items" popup data-testid="profile-menu">
     <template #start>
       <div class="profile-menu__header" data-testid="profile-menu-header">
-        <div class="profile-menu__name app-break">{{ name }}</div>
+        <div v-if="name" class="profile-menu__name app-break">{{ name }}</div>
         <div class="profile-menu__phone">{{ formatPhone(session.profile?.phone ?? '') }}</div>
       </div>
     </template>

@@ -166,14 +166,14 @@ describe('Ввод кода', () => {
     await settle()
   }
 
-  it('первый вход открывает онбординг и сохраняет сессию', async () => {
+  it('первый вход открывает главную и сохраняет сессию', async () => {
     const api = loginApi()
     const { wrapper, router, session } = await openCodeStep()
 
     await enterCode(wrapper, '123456')
 
     expect(api.calls('POST /auth/verify')[0]?.body).toEqual({ phone: PHONE, code: '123456' })
-    await waitForPath(router, '/onboarding')
+    await waitForPath(router, '/')
     expect(session.accessToken).toBe('access-1')
     expect(localStorage.getItem('ik.refreshToken')).toBe('refresh-1')
   })
@@ -185,6 +185,24 @@ describe('Ввод кода', () => {
     await enterCode(wrapper, '123456')
 
     await waitForPath(router, '/')
+  })
+
+  it('повторный вход после выхода показывает новый тестовый код', async () => {
+    const api = loginApi({ 'POST /auth/logout': () => new Response(null, { status: 204 }) })
+    const { wrapper, router, session } = await openCodeStep()
+    expect(wrapper.get('[data-testid="dev-code-value"]').text()).toBe('111111')
+    await enterCode(wrapper, '111111')
+    await waitForPath(router, '/')
+
+    await session.logout()
+    await router.replace('/login')
+    await settle()
+    await wrapper.get('[data-testid="phone-input"]').setValue(PHONE)
+    await wrapper.get('form').trigger('submit')
+    await settle()
+
+    expect(api.calls('GET /auth/test/code')).toHaveLength(2)
+    expect(wrapper.get('[data-testid="dev-code-value"]').text()).toBe('111112')
   })
 
   it('неверный код: ошибка и очищенное поле', async () => {

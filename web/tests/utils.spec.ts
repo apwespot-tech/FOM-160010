@@ -13,6 +13,7 @@ import {
   formatRuDate,
   fromIsoDate,
   fromLocalInputValue,
+  maxBirthDate,
   toIsoDate,
   toLocalInputValue,
   toOffsetIso,
@@ -57,6 +58,14 @@ describe('даты', () => {
     expect([date.getFullYear(), date.getMonth(), date.getDate()]).toEqual([1995, 4, 20])
     expect(toIsoDate(date)).toBe('1995-05-20')
     expect(formatRuDate('1995-05-20')).toBe('20.05.1995')
+  })
+
+  it.each([
+    ['2026-11-05', '2012-11-05'],
+    ['2028-02-29', '2014-02-28'],
+    ['2026-02-28', '2012-02-28'],
+  ])('maxBirthDate: сегодня %s -> %s (ровно 14 лет)', (today, expected) => {
+    expect(toIsoDate(maxBirthDate(new Date(`${today}T15:00:00`)))).toBe(expected)
   })
 })
 

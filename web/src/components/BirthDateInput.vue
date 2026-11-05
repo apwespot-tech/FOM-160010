@@ -8,7 +8,7 @@ import DatePicker from 'primevue/datepicker'
 import InputText from 'primevue/inputtext'
 
 import { useIsMobile } from '@/utils/breakpoints'
-import { fromIsoDate, MIN_BIRTH_DATE, startOfToday, toIsoDate } from '@/utils/dates'
+import { fromIsoDate, maxBirthDate, MIN_BIRTH_DATE, toIsoDate } from '@/utils/dates'
 
 defineProps<{
   modelValue: Date | null
@@ -19,7 +19,7 @@ defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: Date | null] }>()
 
 const isMobile = useIsMobile()
-const maxDate = startOfToday()
+const maxDate = maxBirthDate()
 
 function onNativeInput(value: string | undefined) {
   emit('update:modelValue', value ? fromIsoDate(value) : null)

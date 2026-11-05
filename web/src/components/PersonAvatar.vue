@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Аватар пользователя по avatar_id: загружается с токеном и берётся из кеша.
- * Пока грузится, без аватара или если он не загрузился — инициалы имени.
+ * Пока грузится, без аватара или если он не загрузился — инициалы имени, а без имени — иконка.
  */
 import { computed } from 'vue'
 
@@ -34,7 +34,10 @@ const { url } = useImageUrl(
 <template>
   <span class="person-avatar" :class="[`person-avatar--${size}`, `person-avatar--${shape}`]">
     <img v-if="url" :src="url" alt="" draggable="false" data-testid="avatar-photo" />
-    <span v-else aria-hidden="true" data-testid="avatar-initials">{{ initials(name) }}</span>
+    <span v-else-if="initials(name)" aria-hidden="true" data-testid="avatar-initials">
+      {{ initials(name) }}
+    </span>
+    <i v-else class="pi pi-user" aria-hidden="true" data-testid="avatar-icon" />
   </span>
 </template>
 
@@ -81,6 +84,10 @@ const { url } = useImageUrl(
     width: 144px;
     height: 144px;
   }
+}
+
+.person-avatar .pi {
+  font-size: 1em;
 }
 
 .person-avatar img {

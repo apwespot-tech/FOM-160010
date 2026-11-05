@@ -27,6 +27,20 @@ export function startOfToday(now: Date = new Date()): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate())
 }
 
+/** Минимальный возраст пользователя сервиса. */
+export const MIN_USER_AGE = 14
+
+/**
+ * Самая поздняя дата рождения, при которой сегодня исполнилось MIN_USER_AGE лет (локальная
+ * полночь). Если сегодня 29 февраля, а в году рождения его нет, граница — 28 февраля.
+ */
+export function maxBirthDate(now: Date = new Date()): Date {
+  const today = startOfToday(now)
+  const year = today.getFullYear() - MIN_USER_AGE
+  const date = new Date(year, today.getMonth(), today.getDate())
+  return date.getMonth() === today.getMonth() ? date : new Date(year, today.getMonth() + 1, 0)
+}
+
 /** Локальная полночь дня date. */
 export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())

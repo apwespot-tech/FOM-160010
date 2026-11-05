@@ -2,10 +2,14 @@
 
 import threading
 import uuid
+from datetime import date
 from typing import Any
 
 from fastapi.testclient import TestClient
+from sqlalchemy import update
+from sqlalchemy.orm import Session
 
+from app.models import User
 from tests.conftest import ADMIN_PHONE, FakeClock, auth_header, get_code, login, register
 
 PHONE = "+79991234567"
@@ -97,11 +101,39 @@ def test_birth_date_in_future_rejected(client: TestClient) -> None:
     )
 
 
-def test_birth_date_today_accepted(client: TestClient) -> None:
+def test_birth_date_today_rejected(client: TestClient) -> None:
     user = register(client, PHONE)
     response = patch_own(client, user, {"birth_date": "2026-10-31"})
+    assert response.status_code == 422
+    assert response.json()["detail"]["message"] == "Сервисом можно пользоваться с 14 лет"
+
+
+def test_minimum_age_boundary(client: TestClient) -> None:
+    # Сегодня (START) — 2026-10-31
+    user = register(client, PHONE)
+
+    younger = patch_own(client, user, {"birth_date": "2012-11-01"})
+    exactly = patch_own(client, user, {"birth_date": "2012-10-31"})
+
+    assert younger.status_code == 422
+    assert younger.json()["detail"]["code"] == "invalid_birth_date"
+    assert younger.json()["detail"]["message"] == "Сервисом можно пользоваться с 14 лет"
+    assert exactly.status_code == 200
+    assert exactly.json()["age"] == 14
+
+
+def test_saved_underage_profile_stays_editable(client: TestClient, db: Session) -> None:
+    user = register(client, PHONE)
+    db.execute(
+        update(User).where(User.id == uuid.UUID(user["id"])).values(birth_date=date(2020, 1, 1))
+    )
+    db.commit()
+
+    response = patch_own(client, user, {"about": "Люблю настолки"})
+
     assert response.status_code == 200
-    assert response.json()["age"] == 0
+    assert response.json()["birth_date"] == "2020-01-01"
+    assert response.json()["profile_completed"] is True
 
 
 def test_birth_date_lower_bound(client: TestClient) -> None:
@@ -231,6 +263,7 @@ def test_admin_birth_date_validation(client: TestClient) -> None:
     user = register(client, PHONE)
     admin = register(client, ADMIN_PHONE)
     assert patch_other(client, admin, user["id"], {"birth_date": "2027-01-01"}).status_code == 422
+    assert patch_other(client, admin, user["id"], {"birth_date": "2013-06-01"}).status_code == 422
 
 
 def test_admin_updates_missing_profile(client: TestClient) -> None:
