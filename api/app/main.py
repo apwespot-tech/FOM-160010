@@ -6,7 +6,7 @@ from app.clock import utc_now
 from app.config import Settings
 from app.db import make_engine, make_session_factory
 from app.errors import AppError, app_error_handler
-from app.routers import auth, categories, events, profile
+from app.routers import auth, categories, cities, events, profile, users
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router, prefix="/api")
     app.include_router(profile.router, prefix="/api")
     app.include_router(categories.router, prefix="/api")
+    app.include_router(cities.router, prefix="/api")
+    app.include_router(users.router, prefix="/api")
     app.include_router(events.router, prefix="/api")
 
     if settings.auth_test_endpoints:

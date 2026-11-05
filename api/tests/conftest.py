@@ -21,6 +21,8 @@ API_DIR = Path(__file__).resolve().parents[1]
 ADMIN_PHONE = "+79990000001"
 TEST_SECRET = "test-secret-" + "x" * 32
 START = datetime(2026, 10, 31, 12, 0, tzinfo=UTC)
+# Москва — первый город справочника (миграция 0005)
+MOSCOW_ID = 1
 
 
 class FakeClock:
@@ -83,8 +85,9 @@ def app(settings: Settings, clock: FakeClock) -> Iterator[FastAPI]:
         conn.execute(
             text(
                 # categories не очищаем: справочник заполнен миграцией
-                "TRUNCATE event_photo_data, event_photos, event_participants, events, users, "
-                "user_roles, auth_codes, refresh_tokens RESTART IDENTITY CASCADE"
+                "TRUNCATE event_photo_data, event_photos, event_participants, events, "
+                "user_interests, user_images, users, user_roles, auth_codes, refresh_tokens "
+                "RESTART IDENTITY CASCADE"
             )
         )
     application.state.engine.dispose()
@@ -132,7 +135,7 @@ def register(
     birth_date: str = "2000-01-15",
     **profile: Any,
 ) -> dict[str, Any]:
-    """Вход и заполнение профиля (доп. поля — telegram, photo_url...). Возвращает токены и id."""
+    """Вход и заполнение профиля (доп. поля — telegram, email...). Возвращает токены и id."""
     tokens = login(client, phone)
     response = client.patch(
         "/api/profile",
@@ -151,6 +154,7 @@ def event_payload(**overrides: Any) -> dict[str, Any]:
         "place": "Антикафе «Циферблат»",
         "starts_at": (START + timedelta(days=1)).isoformat(),
         "category_id": 1,
+        "city_id": MOSCOW_ID,
         "max_participants": 5,
         "min_age": 0,
     }
@@ -175,3 +179,17 @@ def set_roles(db: Session, user_id: str, roles: list[Role]) -> None:
     db.execute(delete(UserRole).where(UserRole.user_id == uuid.UUID(user_id)))
     db.add_all(UserRole(user_id=uuid.UUID(user_id), role=role) for role in roles)
     db.commit()
+
+
+def upload_avatar(client: TestClient, user: dict[str, Any], content: bytes | None = None) -> str:
+    """Загружает аватар (по умолчанию — маленький JPEG) и возвращает avatar_id."""
+    from tests.images import make_image
+
+    response = client.put(
+        "/api/profile/avatar",
+        files={"file": ("me.jpg", content or make_image("JPEG"), "image/jpeg")},
+        headers=auth_header(user),
+    )
+    assert response.status_code == 200, response.text
+    avatar_id: str = response.json()["avatar_id"]
+    return avatar_id

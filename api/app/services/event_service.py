@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.ages import calculate_age
 from app.errors import AppError, forbidden, not_found
-from app.models import Category, Event, EventParticipant, EventPhoto, User
+from app.models import Category, City, Event, EventParticipant, EventPhoto, User
 from app.schemas.event import EventCreate, EventUpdate, EventView, ParticipantOut
 
 
@@ -49,17 +49,35 @@ def _photo_ids() -> ScalarSelect[list[uuid.UUID] | None]:
     )
 
 
-# Мероприятие, категория, организатор (имя, фото, Telegram), число участников,
-# признак записи, id фото. Категория — целой строкой: она маленькая, без байтов картинки
+# Мероприятие, категория, город, организатор (имя, аватар, Telegram), число участников,
+# признак записи, id фото. Категория и город — целыми строками: они маленькие, без байтов
 ViewRow = Row[
-    Event, Category, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None
+    Event,
+    Category,
+    City,
+    str | None,
+    uuid.UUID | None,
+    str | None,
+    int,
+    bool,
+    list[uuid.UUID] | None,
 ]
 
 
 def _view_query(
     viewer_id: uuid.UUID,
-) -> Select[Event, Category, str | None, str | None, str | None, int, bool, list[uuid.UUID] | None]:
-    """Мероприятие с категорией, организатором, числом участников, записью и фото."""
+) -> Select[
+    Event,
+    Category,
+    City,
+    str | None,
+    uuid.UUID | None,
+    str | None,
+    int,
+    bool,
+    list[uuid.UUID] | None,
+]:
+    """Мероприятие с категорией, городом, организатором, числом участников, записью и фото."""
     participants_count = _participants_count()
     is_joined = (
         exists()
@@ -70,27 +88,31 @@ def _view_query(
         select(
             Event,
             Category,
+            City,
             User.name,
-            User.photo_url,
+            User.avatar_id,
             User.telegram,
             participants_count,
             is_joined,
             _photo_ids(),
         )
         .join(Category, Category.id == Event.category_id)
+        .join(City, City.id == Event.city_id)
         .join(User, User.id == Event.organizer_id)
     )
 
 
 def _to_view(row: ViewRow, viewer: User) -> EventView:
-    event, category, name, photo_url, telegram, participants_count, is_joined, photos = row
+    event, category, city, name, avatar_id, telegram, participants_count, is_joined, photos = row
     return EventView(
         event=event,
         category_name=category.name,
         category_icon=category.icon,
         category_cover_id=category.cover_id,
         organizer_name=name or "",
-        organizer_photo_url=photo_url,
+        organizer_avatar_id=avatar_id,
+        city_id=city.id,
+        city_name=city.name,
         # Контакт организатора — только записанным участникам и администратору
         organizer_telegram=telegram if is_joined or viewer.is_admin else None,
         participants_count=participants_count,
@@ -187,6 +209,7 @@ def list_events(
 def create_event(session: Session, now: datetime, user: User, data: EventCreate) -> uuid.UUID:
     _ensure_future(data.starts_at, now)
     _ensure_category_exists(session, data.category_id)
+    _ensure_city_exists(session, data.city_id)
     event = Event(organizer_id=user.id, created_at=now, **data.model_dump())
     session.add(event)
     session.flush()
@@ -208,6 +231,8 @@ def update_event(
         _ensure_future(data.starts_at, now)
     if "category_id" in fields and data.category_id is not None:
         _ensure_category_exists(session, data.category_id)
+    if "city_id" in fields and data.city_id is not None:
+        _ensure_city_exists(session, data.city_id)
     if (
         "max_participants" in fields
         and data.max_participants is not None
@@ -286,7 +311,7 @@ def list_participants(session: Session, viewer: User, event_id: uuid.UUID) -> li
         raise event_not_found()
 
     rows = session.execute(
-        select(User.id, User.name, User.photo_url, User.telegram)
+        select(User.id, User.name, User.avatar_id, User.telegram)
         .join(EventParticipant, EventParticipant.user_id == User.id)
         .join(Event, Event.id == EventParticipant.event_id)
         .where(EventParticipant.event_id == event_id)
@@ -294,8 +319,8 @@ def list_participants(session: Session, viewer: User, event_id: uuid.UUID) -> li
         .order_by(User.id != Event.organizer_id, EventParticipant.joined_at, User.id)
     )
     return [
-        ParticipantOut(id=user_id, name=name or "", photo_url=photo_url, telegram=telegram)
-        for user_id, name, photo_url, telegram in rows
+        ParticipantOut(id=user_id, name=name or "", avatar_id=avatar_id, telegram=telegram)
+        for user_id, name, avatar_id, telegram in rows
     ]
 
 
@@ -332,6 +357,11 @@ def _ensure_future(starts_at: datetime, now: datetime) -> None:
 def _ensure_category_exists(session: Session, category_id: int) -> None:
     if session.get(Category, category_id) is None:
         raise AppError(422, "category_not_found", "Категория не найдена")
+
+
+def _ensure_city_exists(session: Session, city_id: int) -> None:
+    if session.get(City, city_id) is None:
+        raise AppError(422, "city_not_found", "Город не найден")
 
 
 def _count_participants(session: Session, event_id: uuid.UUID) -> int:

@@ -32,9 +32,20 @@ export const routes = [
     meta: { incomplete: true },
   },
   {
+    // Короткий адрес своего профиля: гард уже загрузил сессию
     path: '/profile',
     name: 'profile',
-    component: () => import('@/views/ProfileView.vue'),
+    component: () => import('@/views/UserProfileView.vue'),
+    meta: { complete: true },
+    beforeEnter: () => {
+      const session = useSessionStore()
+      return session.profile ? `/users/${session.profile.id}` : '/'
+    },
+  },
+  {
+    path: '/users/:id',
+    name: 'user',
+    component: () => import('@/views/UserProfileView.vue'),
     meta: { complete: true },
   },
   {

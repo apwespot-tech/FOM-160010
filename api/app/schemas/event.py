@@ -7,6 +7,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstrai
 
 from app.models import Event
 from app.models.event import MAX_DURATION_MINUTES, MAX_PARTICIPANTS, MIN_PARTICIPANTS
+from app.schemas.city import CityOut
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Description = Annotated[
@@ -37,6 +38,7 @@ class EventCreate(BaseModel):
 
     title: Title
     description: Description
+    city_id: int
     place: Place
     starts_at: AwareDatetime
     duration_minutes: Duration | None = None
@@ -52,6 +54,7 @@ class EventUpdate(BaseModel):
 
     title: Title | None = None
     description: Description | None = None
+    city_id: int | None = None
     place: Place | None = None
     starts_at: AwareDatetime | None = None
     duration_minutes: Duration | None = None
@@ -72,7 +75,8 @@ class PersonOut(BaseModel):
 
     id: uuid.UUID
     name: str
-    photo_url: str | None
+    # Аватар: GET /users/{id}/images/{avatar_id}
+    avatar_id: uuid.UUID | None
     telegram: str | None
 
 
@@ -93,7 +97,9 @@ class EventView:
     category_icon: str
     category_cover_id: uuid.UUID
     organizer_name: str
-    organizer_photo_url: str | None
+    organizer_avatar_id: uuid.UUID | None
+    city_id: int
+    city_name: str
     organizer_telegram: str | None
     participants_count: int
     is_joined: bool
@@ -111,6 +117,7 @@ class EventOut(BaseModel):
     id: uuid.UUID
     title: str
     description: str
+    city: CityOut
     place: str
     starts_at: datetime
     duration_minutes: int | None
@@ -133,6 +140,7 @@ class EventOut(BaseModel):
             id=event.id,
             title=event.title,
             description=event.description,
+            city=CityOut(id=view.city_id, name=view.city_name),
             place=event.place,
             starts_at=event.starts_at,
             duration_minutes=event.duration_minutes,
@@ -148,7 +156,7 @@ class EventOut(BaseModel):
             organizer=OrganizerOut(
                 id=event.organizer_id,
                 name=view.organizer_name,
-                photo_url=view.organizer_photo_url,
+                avatar_id=view.organizer_avatar_id,
                 telegram=view.organizer_telegram,
             ),
             photos=[PhotoRef(id=photo_id) for photo_id in view.photo_ids],

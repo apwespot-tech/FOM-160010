@@ -1,4 +1,5 @@
 import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { EventItem, Participant } from '@/api/events'
@@ -7,6 +8,7 @@ import type { Profile } from '@/api/profile'
 import {
   blobResponse,
   categories,
+  cities,
   completeProfile,
   errorResponse,
   eventItem,
@@ -22,7 +24,7 @@ import { bodyGet, renderApp, settle, waitForPath, withStoredSession } from './he
 const NOW = new Date('2026-10-31T09:00:00Z')
 const ME = completeProfile.id
 const ADMIN: Profile = { ...completeProfile, roles: ['organizer', 'participant', 'admin'] }
-const PERSON = { photo_url: null, telegram: null }
+const PERSON = { avatar_id: null, telegram: null }
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -189,20 +191,24 @@ describe('Блок организатора', () => {
   })
 
   it('фото и «Написать», когда сервер отдал Telegram', async () => {
-    await openEvent(
+    const { api } = await openEvent(
       eventItem({
         is_joined: true,
         organizer: {
           id: 'org-1',
           name: 'Борис Петров',
-          photo_url: 'https://example.com/b.jpg',
+          avatar_id: 'av-1',
           telegram: '@boris_k',
         },
       }),
+      { 'GET /users/org-1/images/av-1': () => blobResponse() },
     )
+    await settle()
 
-    expect(find('organizer-card')?.querySelector('img')?.getAttribute('src')).toBe(
-      'https://example.com/b.jpg',
+    // Аватар — уменьшенная копия, запрошенная с токеном
+    expect(find('organizer-card')?.querySelector('img')?.getAttribute('src')).toMatch(/^blob:/)
+    expect(api.calls('GET /users/org-1/images/av-1')[0]?.url).toBe(
+      '/api/users/org-1/images/av-1?size=thumb',
     )
     const write = find('organizer-write') as HTMLAnchorElement
     expect(write.href).toBe('https://t.me/boris_k')
@@ -211,7 +217,7 @@ describe('Блок организатора', () => {
 
   it('организатор не видит «Написать» на своём мероприятии', async () => {
     await openEvent(
-      mine({ organizer: { id: ME, name: 'Анна Иванова', photo_url: null, telegram: '@anna_k' } }),
+      mine({ organizer: { id: ME, name: 'Анна Иванова', avatar_id: null, telegram: '@anna_k' } }),
     )
     expect(exists('organizer-write')).toBe(false)
   })
@@ -404,7 +410,7 @@ describe('Участники', () => {
   it('организатор первым, Telegram ссылкой, без Telegram — без подзаголовка', async () => {
     const people: Participant[] = [
       { id: 'org-1', name: 'Борис Петров', ...PERSON },
-      { id: ME, name: 'Анна Иванова', photo_url: null, telegram: '@anna_k' },
+      { id: ME, name: 'Анна Иванова', avatar_id: null, telegram: '@anna_k' },
     ]
     await openEvent(eventItem({ is_joined: true, participants_count: 2 }), {
       'GET /events/e1/participants': () => jsonResponse(200, people),
@@ -682,5 +688,101 @@ describe('Фото в режиме редактирования', () => {
 
     await click('event-edit')
     expect(tiles()).toHaveLength(2)
+  })
+})
+
+describe('Люди и город в окне мероприятия', () => {
+  it('аватары участников, инициалы при ошибке, ссылки на профили', async () => {
+    const { router } = await openEvent(
+      eventItem({
+        is_joined: true,
+        organizer: { id: 'org-1', name: 'Борис Петров', avatar_id: 'av-1', telegram: null },
+      }),
+      {
+        'GET /events/e1/participants': () =>
+          jsonResponse(200, [
+            { id: 'org-1', name: 'Борис Петров', avatar_id: 'av-1', telegram: null },
+            { id: ME, name: 'Анна Иванова', avatar_id: 'av-2', telegram: null },
+          ]),
+        'GET /users/org-1/images/av-1': () => blobResponse(),
+        [`GET /users/${ME}/images/av-2`]: () => errorResponse(500, 'oops'),
+      },
+    )
+    await settle()
+
+    const items = all('participant')
+    expect(items[0]?.querySelector('img')?.getAttribute('src')).toMatch(/^blob:/)
+    expect(items[1]?.querySelector('[data-testid="avatar-initials"]')?.textContent).toBe('АИ')
+    expect(items[1]?.querySelector('img')).toBeNull()
+
+    const names = all('participant-name') as HTMLAnchorElement[]
+    expect(names.map((link) => link.getAttribute('href'))).toEqual(['/users/org-1', `/users/${ME}`])
+    names[1]?.click()
+    await waitForPath(router, `/users/${ME}`)
+  })
+
+  it('записанный переходит в профиль организатора по имени', async () => {
+    const { router } = await openEvent(eventItem({ is_joined: true }))
+
+    const link = find('organizer-name') as HTMLAnchorElement
+    expect(link.tagName).toBe('A')
+    expect(link.getAttribute('href')).toBe('/users/org-1')
+    expect(find('organizer-avatar')?.getAttribute('href')).toBe('/users/org-1')
+    link.click()
+    await waitForPath(router, '/users/org-1')
+  })
+
+  it('незаписанному имя и аватар организатора — текст без перехода', async () => {
+    const { router } = await openEvent(eventItem({ is_joined: false }))
+
+    const name = find('organizer-name')
+    expect(name?.tagName).toBe('SPAN')
+    expect(name?.getAttribute('href')).toBeNull()
+    expect(find('organizer-avatar')?.tagName).toBe('SPAN')
+    name?.click()
+    await settle()
+    expect(router.currentRoute.value.path).toBe('/events/e1')
+  })
+
+  it('администратору профиль организатора доступен и без записи', async () => {
+    await openEvent(eventItem({ is_joined: false }), {}, ADMIN)
+
+    expect(find('organizer-name')?.getAttribute('href')).toBe('/users/org-1')
+  })
+
+  it('после отказа имя организатора перестаёт быть ссылкой', async () => {
+    const left = eventItem({ is_joined: false })
+    await openEvent(eventItem({ is_joined: true }), {
+      'POST /events/e1/leave': () => jsonResponse(200, left),
+    })
+    expect(find('organizer-name')?.tagName).toBe('A')
+
+    await click('leave')
+
+    expect(find('organizer-name')?.tagName).toBe('SPAN')
+  })
+
+  it('плитка «Где» — город и место', async () => {
+    await openEvent(eventItem())
+
+    expect(text('event-where')).toBe('Москва, Антикафе «Циферблат»')
+  })
+
+  it('смена города при редактировании уходит в PATCH', async () => {
+    const { api, wrapper } = await openEvent(mine(), {
+      'GET /cities': () => jsonResponse(200, cities),
+      'PATCH /events/e1': () => jsonResponse(200, mine({ city: { id: 5, name: 'Казань' } })),
+    })
+
+    await click('event-edit')
+    wrapper
+      .findAllComponents(Select)
+      .find((select) => select.attributes('data-testid') === 'field-city-id')
+      ?.vm.$emit('update:modelValue', 5)
+    await settle()
+    await click('event-save')
+
+    expect(api.calls('PATCH /events/e1')[0]?.body).toEqual({ city_id: 5 })
+    expect(text('event-where')).toBe('Казань, Антикафе «Циферблат»')
   })
 })

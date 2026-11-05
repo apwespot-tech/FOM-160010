@@ -2,6 +2,7 @@ import { enableAutoUnmount } from '@vue/test-utils'
 import { afterEach, beforeEach } from 'vitest'
 
 import { resetCategoriesCache } from '@/composables/useCategories'
+import { resetCitiesCache } from '@/composables/useCities'
 import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
 import { clearPhotoCache } from '@/composables/usePhotoUrl'
 
@@ -28,6 +29,7 @@ beforeEach(() => {
   localStorage.clear()
   // Модульное состояние живёт между тестами одного файла
   resetCategoriesCache()
+  resetCitiesCache()
   clearPhotoCache()
   useCreateEventDialog().close()
 })

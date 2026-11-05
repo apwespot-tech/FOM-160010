@@ -14,6 +14,7 @@ import { MIN_AGE_VALUES, type MinAge } from '@/api/events'
 import DateTimeInput from '@/components/DateTimeInput.vue'
 import { injectEventForm } from '@/composables/eventFormContext'
 import { useCategories } from '@/composables/useCategories'
+import { useCities } from '@/composables/useCities'
 import { MAX_PARTICIPANTS, type EventField } from '@/composables/useEventForm'
 import { formatMinAge } from '@/utils/format'
 
@@ -21,6 +22,7 @@ const props = defineProps<{ field: EventField; inputId: string; ariaLabel?: stri
 
 const { form, errorFor, touch, minParticipants } = injectEventForm()
 const { categories } = useCategories()
+const { cities } = useCities()
 
 const error = computed(() => errorFor(props.field))
 const ageOptions = MIN_AGE_VALUES.map((value) => ({ value, label: formatMinAge(value) }))
@@ -30,6 +32,11 @@ const slug = computed(() => props.field.replace(/[A-Z]/g, (c) => `-${c.toLowerCa
 function setCategory(value: unknown) {
   form.categoryId = typeof value === 'number' ? value : null
   touch('categoryId')
+}
+
+function setCity(value: unknown) {
+  form.cityId = typeof value === 'number' ? value : null
+  touch('cityId')
 }
 
 function setStartsAt(value: Date | null) {
@@ -93,6 +100,21 @@ function setMinAge(value: unknown) {
       :invalid="error !== null"
       :data-testid="`field-${slug}`"
       @update:model-value="setCategory"
+    />
+    <Select
+      v-else-if="field === 'cityId'"
+      :input-id="inputId"
+      :model-value="form.cityId"
+      :options="cities"
+      option-label="name"
+      option-value="id"
+      placeholder="Выберите город"
+      filter
+      filter-placeholder="Найти город"
+      :aria-label="ariaLabel"
+      :invalid="error !== null"
+      :data-testid="`field-${slug}`"
+      @update:model-value="setCity"
     />
     <DateTimeInput
       v-else-if="field === 'startsAt'"

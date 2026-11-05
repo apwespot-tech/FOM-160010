@@ -15,13 +15,19 @@ import EventFormFields from '@/components/EventFormFields.vue'
 import { provideEventForm } from '@/composables/eventFormContext'
 import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
 import { useEventForm } from '@/composables/useEventForm'
+import { useSessionStore } from '@/stores/session'
 import { useIsMobile } from '@/utils/breakpoints'
 
 const router = useRouter()
 const isMobile = useIsMobile()
 const { visible, close, notifyCreated } = useCreateEventDialog()
 
-const controller = useEventForm({ getInitial: () => null })
+const session = useSessionStore()
+// Город нового мероприятия по умолчанию — из профиля
+const controller = useEventForm({
+  getInitial: () => null,
+  defaultCityId: () => session.profile?.city?.id ?? null,
+})
 provideEventForm(controller)
 const { saving, requiredFilled, dirty, created, reset, submit, releasePhotos } = controller
 

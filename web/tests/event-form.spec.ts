@@ -1,3 +1,4 @@
+import Select from 'primevue/select'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
@@ -8,6 +9,7 @@ import { useEventForm } from '@/composables/useEventForm'
 import {
   blobResponse,
   categories,
+  cities,
   completeProfile,
   errorResponse,
   eventItem,
@@ -34,6 +36,7 @@ afterEach(() => {
 function fillValid(form: ReturnType<typeof useEventForm>['form']) {
   form.title = '  Настолки  '
   form.categoryId = 1
+  form.cityId = 1
   form.startsAt = TOMORROW_19
   form.place = 'Антикафе'
   form.description = 'Играем'
@@ -51,6 +54,7 @@ describe('Проверка полей формы мероприятия', () => 
     expect(api.calls('POST /events')[0]?.body).toEqual({
       title: 'Настолки',
       description: 'Играем',
+      city_id: 1,
       place: 'Антикафе',
       starts_at: '2026-11-01T19:00:00+03:00',
       duration_minutes: null,
@@ -346,6 +350,7 @@ function createdFromForm(overrides: Partial<EventItem> = {}): EventItem {
     id: 'new-1',
     title: 'Футбол в парке',
     category: { id: 3, name: 'Спорт', icon: 'pi-bolt', cover_id: 'cov-3' },
+    city: { id: 1, name: 'Москва' },
     starts_at: '2026-11-01T16:00:00Z',
     duration_minutes: null,
     place: 'Парк Горького',
@@ -511,5 +516,46 @@ describe('Создание мероприятия с фото', () => {
     bodyGet('[data-testid="create-event-cancel"]').click()
     await waitForPath(router, '/events/new-1')
     await vi.waitFor(() => expect(dialogOpen()).toBe(false))
+  })
+})
+
+describe('Город мероприятия в окне создания', () => {
+  it('по умолчанию — город из профиля, он уходит в POST', async () => {
+    const { api } = await openCreateDialog()
+    api.on('GET /cities', () => jsonResponse(200, cities))
+
+    await fillCreateForm()
+    submitCreate().click()
+    await settle()
+
+    expect(api.calls('POST /events')[0]?.body).toMatchObject({ city_id: 1 })
+  })
+
+  it('без города в профиле «Создать» неактивна, пока город не выбран', async () => {
+    setViewportWidth(360)
+    const api = mockApi({
+      'GET /events': () => jsonResponse(200, { items: [], total: 0 }),
+      'GET /categories': () => jsonResponse(200, categories),
+      'GET /cities': () => jsonResponse(200, cities),
+      'POST /events': () => jsonResponse(201, eventItem({ id: 'new-1' })),
+    })
+    withStoredSession(api, { ...completeProfile, city: null })
+    const { wrapper } = await renderApp('/')
+    await wrapper.get('[data-testid="create-event"]').trigger('click')
+    await settle()
+
+    await fillCreateForm()
+    expect(submitCreate().disabled).toBe(true)
+
+    wrapper
+      .findAllComponents(Select)
+      .find((select) => select.attributes('data-testid') === 'field-city-id')
+      ?.vm.$emit('update:modelValue', 5)
+    await settle()
+
+    expect(submitCreate().disabled).toBe(false)
+    submitCreate().click()
+    await settle()
+    expect(api.calls('POST /events')[0]?.body).toMatchObject({ city_id: 5 })
   })
 })

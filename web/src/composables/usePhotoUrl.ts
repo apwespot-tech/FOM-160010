@@ -1,6 +1,7 @@
 import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 
 import { fetchCategoryCover, fetchEventPhoto, type Category, type ImageSize } from '@/api/events'
+import { fetchUserImage } from '@/api/profile'
 
 /**
  * Кеш картинок по ключу: фото мероприятия (`photo:<id>:<size>`) и картинки категорий
@@ -42,6 +43,15 @@ export function loadPhotoUrl(
   size: ImageSize = 'full',
 ): Promise<string> {
   return loadCached(`photo:${photoId}:${size}`, () => fetchEventPhoto(eventId, photoId, size))
+}
+
+/** Аватар или обложка пользователя по id картинки. */
+export function loadUserImageUrl(
+  userId: string,
+  imageId: string,
+  size: ImageSize = 'thumb',
+): Promise<string> {
+  return loadCached(`user:${imageId}:${size}`, () => fetchUserImage(userId, imageId, size))
 }
 
 export function loadCategoryCoverUrl(

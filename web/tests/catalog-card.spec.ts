@@ -152,7 +152,7 @@ describe('Карточка мероприятия в списке', () => {
   it('своё мероприятие: «Вы организатор» и «Организатор»', async () => {
     const { wrapper } = await renderList([
       eventItem({
-        organizer: { id: completeProfile.id, name: 'Анна', photo_url: null, telegram: null },
+        organizer: { id: completeProfile.id, name: 'Анна', avatar_id: null, telegram: null },
         is_joined: true,
       }),
     ])
@@ -160,6 +160,14 @@ describe('Карточка мероприятия в списке', () => {
 
     expect(text(card!, 'event-card-organizer')).toBe('Вы организатор')
     expect(text(card!, 'event-card-status')).toBe('Организатор')
+  })
+
+  it('город перед местом', async () => {
+    const { wrapper } = await renderList([eventItem({ city: { id: 5, name: 'Казань' } })])
+
+    expect(wrapper.get('[data-testid="event-card-place"]').text()).toBe(
+      'Казань, Антикафе «Циферблат»',
+    )
   })
 
   it('возраст: 18+ показывается, 0 — нет; дата на обложке', async () => {

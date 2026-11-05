@@ -1,5 +1,6 @@
 from app.models.auth import AuthCode, RefreshToken
 from app.models.base import Base
+from app.models.city import City
 from app.models.event import (
     Category,
     CategoryCover,
@@ -8,13 +9,14 @@ from app.models.event import (
     EventPhoto,
     EventPhotoData,
 )
-from app.models.user import Role, User, UserRole
+from app.models.user import Role, User, UserImage, UserInterest, UserRole
 
 __all__ = [
     "AuthCode",
     "Base",
     "Category",
     "CategoryCover",
+    "City",
     "Event",
     "EventParticipant",
     "EventPhoto",
@@ -22,5 +24,7 @@ __all__ = [
     "RefreshToken",
     "Role",
     "User",
+    "UserImage",
+    "UserInterest",
     "UserRole",
 ]

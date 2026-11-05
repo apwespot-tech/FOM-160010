@@ -26,6 +26,7 @@ import {
 export type EventField =
   | 'title'
   | 'categoryId'
+  | 'cityId'
   | 'startsAt'
   | 'durationMinutes'
   | 'place'
@@ -36,6 +37,7 @@ export type EventField =
 const FIELDS: EventField[] = [
   'title',
   'categoryId',
+  'cityId',
   'startsAt',
   'durationMinutes',
   'place',
@@ -46,6 +48,7 @@ const FIELDS: EventField[] = [
 const SERVER_FIELDS: Record<string, EventField> = {
   title: 'title',
   category_id: 'categoryId',
+  city_id: 'cityId',
   starts_at: 'startsAt',
   duration_minutes: 'durationMinutes',
   place: 'place',
@@ -92,6 +95,8 @@ export interface EventFormOptions {
    * а повторное сохранение не отправляет поля ещё раз.
    */
   onPartialSave?: (event: EventItem) => void
+  /** Город нового мероприятия по умолчанию — из профиля. */
+  defaultCityId?: () => number | null
   /** Текущее время (подменяется в тестах). */
   now?: () => Date
 }
@@ -104,11 +109,13 @@ export interface EventFormOptions {
 export function useEventForm({
   getInitial,
   onPartialSave,
+  defaultCityId = () => null,
   now = () => new Date(),
 }: EventFormOptions) {
   const form = reactive({
     title: '',
     categoryId: null as number | null,
+    cityId: null as number | null,
     startsAt: null as Date | null,
     durationMinutes: null as number | null,
     place: '',
@@ -202,6 +209,8 @@ export function useEventForm({
     const initial = getInitial()
     form.title = initial?.title ?? ''
     form.categoryId = initial?.category.id ?? null
+    // Новое мероприятие — в городе из профиля
+    form.cityId = initial?.city.id ?? defaultCityId()
     form.startsAt = initial ? new Date(initial.starts_at) : null
     form.durationMinutes = initial?.duration_minutes ?? null
     form.place = initial?.place ?? ''
@@ -236,6 +245,8 @@ export function useEventForm({
         return textError(form.description, 2000, 'Добавьте описание')
       case 'categoryId':
         return form.categoryId === null ? 'Выберите категорию' : null
+      case 'cityId':
+        return form.cityId === null ? 'Выберите город' : null
       case 'startsAt':
         if (!form.startsAt) return 'Укажите дату и время'
         return form.startsAt <= now() ? FUTURE_REQUIRED : null
@@ -276,6 +287,7 @@ export function useEventForm({
     () =>
       form.title.trim().length > 0 &&
       form.categoryId !== null &&
+      form.cityId !== null &&
       form.startsAt !== null &&
       form.place.trim().length > 0 &&
       form.maxParticipants !== null &&
@@ -286,6 +298,7 @@ export function useEventForm({
     return {
       title: form.title.trim(),
       description: form.description.trim(),
+      city_id: form.cityId as number,
       place: form.place.trim(),
       starts_at: toOffsetIso(form.startsAt as Date),
       duration_minutes: form.durationMinutes,
@@ -302,6 +315,7 @@ export function useEventForm({
     if (payload.title !== initial.title) patch.title = payload.title
     if (payload.description !== initial.description) patch.description = payload.description
     if (payload.place !== initial.place) patch.place = payload.place
+    if (payload.city_id !== initial.city.id) patch.city_id = payload.city_id
     if ((form.startsAt as Date).getTime() !== new Date(initial.starts_at).getTime()) {
       patch.starts_at = payload.starts_at
     }
@@ -323,6 +337,7 @@ export function useEventForm({
       form.place.trim() !== '' ||
       form.description.trim() !== '' ||
       form.categoryId !== null ||
+      form.cityId !== defaultCityId() ||
       form.startsAt !== null ||
       form.durationMinutes !== null ||
       form.maxParticipants !== DEFAULT_MAX_PARTICIPANTS ||
@@ -337,6 +352,7 @@ export function useEventForm({
     }
     if (error.code === 'starts_at_in_past') serverErrors.startsAt = FUTURE_REQUIRED
     else if (error.code === 'category_not_found') serverErrors.categoryId = 'Категория не найдена'
+    else if (error.code === 'city_not_found') serverErrors.cityId = 'Город не найден'
     else if (error.code === 'limit_below_participants') {
       serverErrors.maxParticipants = 'Лимит меньше числа записавшихся участников'
     } else if (error.status === 422 && error.fields.some((field) => field in SERVER_FIELDS)) {

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Category,
     CategoryCover,
+    City,
     Event,
     EventParticipant,
     EventPhoto,
@@ -16,6 +17,8 @@ from app.models import (
     RefreshToken,
     Role,
     User,
+    UserImage,
+    UserInterest,
     UserRole,
 )
 
@@ -73,6 +76,7 @@ def _event(organizer_id: uuid.UUID, **overrides: object) -> Event:
     fields: dict[str, object] = {
         "organizer_id": organizer_id,
         "category_id": 1,
+        "city_id": 1,
         "title": "t",
         "description": "d",
         "place": "p",
@@ -227,3 +231,50 @@ def test_category_cover_cannot_be_deleted_while_used(db: Session) -> None:
     with pytest.raises(IntegrityError):
         db.execute(delete(CategoryCover).where(CategoryCover.id == cover_id))
         db.commit()
+
+
+# --- города, картинки и интересы пользователей ---
+
+
+def test_city_name_is_unique(db: Session) -> None:
+    db.add(City(name="Москва"))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_event_requires_city(db: Session) -> None:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    db.add(_event(user.id, city_id=None))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_city_with_events_cannot_be_deleted(db: Session) -> None:
+    _event_with_owner(db)
+    db.commit()
+
+    with pytest.raises(IntegrityError):
+        db.execute(delete(City).where(City.id == 1))
+        db.commit()
+
+
+def test_user_delete_cascades_images_and_interests(db: Session) -> None:
+    user = User(phone="+79991110001")
+    db.add(user)
+    db.flush()
+    image = UserImage(
+        user_id=user.id, content_type="image/webp", data=b"d", thumb=b"t", created_at=NOW
+    )
+    db.add(image)
+    db.add(UserInterest(user_id=user.id, category_id=1))
+    db.flush()
+    user.avatar_id = image.id
+    db.commit()
+
+    db.execute(delete(User).where(User.id == user.id))
+    db.commit()
+
+    assert db.scalar(select(func.count()).select_from(UserImage)) == 0
+    assert db.scalar(select(func.count()).select_from(UserInterest)) == 0

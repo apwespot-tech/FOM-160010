@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 
 import type { TokenPair } from '@/api/auth'
-import type { Category, EventItem } from '@/api/events'
+import type { Category, City, EventItem } from '@/api/events'
 import type { Profile } from '@/api/profile'
 
 export interface MockRequest {
@@ -88,19 +88,32 @@ export const draftProfile: Profile = {
   age: null,
   email: null,
   telegram: null,
-  photo_url: null,
+  about: null,
+  city: null,
+  interests: [],
+  avatar_id: null,
+  cover_id: null,
+  created_at: '2023-11-05T09:00:00Z',
+  stats: { organized_count: 0, attended_count: 0 },
   roles: ['organizer', 'participant'],
   profile_completed: false,
 }
 
 export const completeProfile: Profile = {
   ...draftProfile,
+  city: { id: 1, name: 'Москва' },
   name: 'Анна Иванова',
   birth_date: '2000-01-15',
   age: 26,
   telegram: '@anna_k',
   profile_completed: true,
 }
+
+export const cities: City[] = [
+  { id: 5, name: 'Казань' },
+  { id: 1, name: 'Москва' },
+  { id: 2, name: 'Санкт-Петербург' },
+]
 
 export const categories: Category[] = [
   { id: 1, name: 'Настольные игры', icon: 'pi-th-large', cover_id: 'cov-1' },
@@ -115,6 +128,7 @@ export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
     id: 'e1',
     title: 'Настолки в антикафе',
     description: 'Играем в «Каркассон»',
+    city: { id: 1, name: 'Москва' },
     place: 'Антикафе «Циферблат»',
     starts_at: '2026-11-01T16:00:00Z',
     duration_minutes: 120,
@@ -122,7 +136,7 @@ export function eventItem(overrides: Partial<EventItem> = {}): EventItem {
     category: { id: 1, name: 'Настольные игры', icon: 'pi-th-large', cover_id: 'cov-1' },
     max_participants: 10,
     min_age: 0,
-    organizer: { id: 'org-1', name: 'Борис Петров', photo_url: null, telegram: null },
+    organizer: { id: 'org-1', name: 'Борис Петров', avatar_id: null, telegram: null },
     photos: [],
     participants_count: 3,
     free_places: 7,

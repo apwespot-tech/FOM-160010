@@ -34,10 +34,17 @@ def test_get_own_profile(client: TestClient) -> None:
         "age": 25,
         "email": None,
         "telegram": None,
-        "photo_url": None,
+        "about": None,
+        "city": None,
+        "interests": [],
+        "avatar_id": None,
+        "cover_id": None,
+        "created_at": body["created_at"],
+        "stats": {"organized_count": 0, "attended_count": 0},
         "roles": ["organizer", "participant"],
         "profile_completed": True,
     }
+    assert body["created_at"]
 
 
 def test_age_on_birthday(client: TestClient) -> None:
@@ -50,7 +57,7 @@ def test_partial_update_and_clear_optional(client: TestClient) -> None:
     response = patch_own(
         client,
         user,
-        {"telegram": "@anna_k", "email": "ann@example.com", "photo_url": "https://ex.com/a.png"},
+        {"telegram": "@anna_k", "email": "ann@example.com"},
     )
     assert response.status_code == 200
     assert response.json()["telegram"] == "@anna_k"

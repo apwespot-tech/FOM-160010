@@ -10,7 +10,7 @@ async function currentPath(path: string) {
 
 describe('Доступ к страницам', () => {
   describe('гость', () => {
-    it.each(['/profile', '/onboarding', '/', '/events/e1', '/unknown/page'])(
+    it.each(['/profile', '/users/u2', '/onboarding', '/', '/events/e1', '/unknown/page'])(
       '%s -> /login',
       async (path) => {
         mockApi()
@@ -42,9 +42,14 @@ describe('Доступ к страницам', () => {
       expect(await currentPath(path)).toBe('/')
     })
 
-    it.each(['/', '/profile', '/events/e1'])('%s доступен', async (path) => {
+    it.each(['/', '/events/e1', '/users/u2'])('%s доступен', async (path) => {
       withStoredSession(mockApi(), completeProfile)
       expect(await currentPath(path)).toBe(path)
+    })
+
+    it('/profile -> /users/<свой id>', async () => {
+      withStoredSession(mockApi(), completeProfile)
+      expect(await currentPath('/profile')).toBe(`/users/${completeProfile.id}`)
     })
   })
 })

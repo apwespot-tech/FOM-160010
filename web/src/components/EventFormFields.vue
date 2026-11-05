@@ -38,7 +38,11 @@ const id = (name: string) => `${props.idPrefix}-${name}`
       <label :for="id('max')">Максимум участников *</label>
       <EventFieldInput field="maxParticipants" :input-id="id('max')" />
     </div>
-    <div class="app-field event-form__wide">
+    <div class="app-field">
+      <label :for="id('city')">Город *</label>
+      <EventFieldInput field="cityId" :input-id="id('city')" />
+    </div>
+    <div class="app-field">
       <label :for="id('place')">Место *</label>
       <EventFieldInput field="place" :input-id="id('place')" />
     </div>

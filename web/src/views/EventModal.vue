@@ -320,7 +320,11 @@ function confirmRemoveParticipant(participant: Participant) {
           </EventTile>
 
           <EventTile icon="pi-map-marker" label="Где">
-            <span data-testid="event-place">{{ event.place }}</span>
+            <span data-testid="event-where">
+              <span data-testid="event-city">{{ event.city.name }}</span
+              >,
+              <span data-testid="event-place">{{ event.place }}</span>
+            </span>
           </EventTile>
 
           <EventTile icon="pi-users" label="Места и возраст">
@@ -343,6 +347,7 @@ function confirmRemoveParticipant(participant: Participant) {
           :organizer="event.organizer"
           :created-at="event.created_at"
           :can-write="!isOrganizer"
+          :linked="canSeeParticipants"
         />
 
         <section class="event-modal__section">

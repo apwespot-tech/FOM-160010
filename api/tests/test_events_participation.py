@@ -20,6 +20,7 @@ from tests.conftest import (
     login,
     register,
     set_roles,
+    upload_avatar,
 )
 
 ORGANIZER = "+79991234567"
@@ -342,8 +343,8 @@ def test_participants_list(client: TestClient) -> None:
         OTHER,
         name="Борис",
         telegram="@boris_k",
-        photo_url="https://example.com/boris.jpg",
     )
+    boris_avatar = upload_avatar(client, other)
     event = create_event(client, organizer)
     join(client, other, event["id"])
 
@@ -351,11 +352,11 @@ def test_participants_list(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == [
-        {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
+        {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None},
         {
             "id": other["id"],
             "name": "Борис",
-            "photo_url": "https://example.com/boris.jpg",
+            "avatar_id": boris_avatar,
             "telegram": "@boris_k",
         },
     ]

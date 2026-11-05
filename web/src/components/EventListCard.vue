@@ -101,7 +101,7 @@ const mainPhotoId = computed(() => props.event.photos[0]?.id ?? null)
       </div>
       <p class="event-card__place app-break">
         <i class="pi pi-map-marker" aria-hidden="true" />
-        {{ event.place }}
+        <span data-testid="event-card-place">{{ event.city.name }}, {{ event.place }}</span>
       </p>
 
       <div class="event-card__footer">

@@ -44,6 +44,7 @@ describe('API мероприятий', () => {
     await createEvent({
       title: 't',
       description: 'd',
+      city_id: 1,
       place: 'p',
       starts_at: '2026-11-01T19:00:00+03:00',
       duration_minutes: null,

@@ -111,8 +111,10 @@ def test_calculate_age(birth_date: date, today: date, age: int) -> None:
         {"telegram": "username"},
         {"telegram": "@" + "a" * 33},
         {"email": "not-an-email"},
-        {"photo_url": "ftp://example.com/a.png"},
-        {"photo_url": "not a url"},
+        {"photo_url": "https://example.com/a.png"},
+        {"about": "x" * 501},
+        {"interest_ids": [1, 1]},
+        {"interest_ids": None},
         {"phone": "+79991234567"},
         {"roles": ["admin"]},
         {"id": str(uuid.uuid4())},
@@ -129,16 +131,18 @@ def test_valid_own_profile_update() -> None:
             "name": "  Анна  ",
             "telegram": "@anna_k",
             "email": "ann@example.com",
-            "photo_url": "https://example.com/a.png",
+            "about": "  Люблю настолки\nи прогулки  ",
             "birth_date": "1900-01-01",
         }
     )
     assert data.name == "Анна"
-    assert data.model_fields_set == {"name", "telegram", "email", "photo_url", "birth_date"}
+    assert data.about == "Люблю настолки\nи прогулки"
+    assert data.model_fields_set == {"name", "telegram", "email", "about", "birth_date"}
+    assert ProfileUpdate.model_validate({"about": "   "}).about is None
 
 
 def test_optional_fields_can_be_cleared() -> None:
-    data = ProfileUpdate.model_validate({"telegram": None, "email": None, "photo_url": None})
+    data = ProfileUpdate.model_validate({"telegram": None, "email": None, "about": None})
     assert data.telegram is None and "telegram" in data.model_fields_set
 
 
@@ -162,6 +166,7 @@ def _event_fields(**overrides: object) -> dict[str, object]:
         "place": "Парк",
         "starts_at": "2026-11-01T19:00:00+03:00",
         "category_id": 2,
+        "city_id": 1,
         "max_participants": 5,
         "min_age": 0,
     }

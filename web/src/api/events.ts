@@ -15,6 +15,11 @@ export interface Category {
   cover_id: string
 }
 
+export interface City {
+  id: number
+  name: string
+}
+
 /** Размер картинки: исходник или уменьшенная копия (WebP, ширина до 800 px). */
 export type ImageSize = 'full' | 'thumb'
 
@@ -22,7 +27,8 @@ export type ImageSize = 'full' | 'thumb'
 export interface PersonRef {
   id: string
   name: string
-  photo_url: string | null
+  /** Аватар: GET /users/{id}/images/{avatar_id} */
+  avatar_id: string | null
   telegram: string | null
 }
 
@@ -34,6 +40,7 @@ export interface EventItem {
   id: string
   title: string
   description: string
+  city: City
   place: string
   starts_at: string
   duration_minutes: number | null
@@ -60,6 +67,7 @@ export type Participant = PersonRef
 export interface EventCreate {
   title: string
   description: string
+  city_id: number
   place: string
   /** ISO 8601 с часовым поясом */
   starts_at: string
@@ -95,6 +103,10 @@ function toQuery(params: EventListParams): string {
   }
   const text = query.toString()
   return text ? `?${text}` : ''
+}
+
+export function listCities(): Promise<City[]> {
+  return apiFetch('/cities', { auth: true })
 }
 
 export function listCategories(): Promise<Category[]> {

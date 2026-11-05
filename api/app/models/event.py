@@ -87,6 +87,8 @@ class Event(Base):
         primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()")
     )
     organizer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Город обязателен; удалить город, на который ссылаются мероприятия, нельзя
+    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"))
     title: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(2000))

@@ -17,6 +17,7 @@ from tests.conftest import (
     join,
     register,
     set_roles,
+    upload_avatar,
 )
 
 ORGANIZER = "+79991234567"
@@ -53,6 +54,7 @@ def test_create_event(client: TestClient) -> None:
     assert body == {
         "title": "Настолки в антикафе",
         "description": "Играем в «Каркассон» и «Кодовые имена»",
+        "city": {"id": 1, "name": "Москва"},
         "place": "Антикафе «Циферблат»",
         "starts_at": "2026-11-01T12:00:00Z",
         "duration_minutes": 120,
@@ -65,7 +67,7 @@ def test_create_event(client: TestClient) -> None:
         },
         "max_participants": 5,
         "min_age": 16,
-        "organizer": {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None},
+        "organizer": {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None},
         "photos": [],
         "participants_count": 1,
         "free_places": 4,
@@ -81,7 +83,7 @@ def test_organizer_is_only_participant_after_create(client: TestClient) -> None:
     response = client.get(f"/api/events/{event['id']}/participants", headers=auth_header(organizer))
 
     assert response.json() == [
-        {"id": organizer["id"], "name": "Анна", "photo_url": None, "telegram": None}
+        {"id": organizer["id"], "name": "Анна", "avatar_id": None, "telegram": None}
     ]
 
 
@@ -168,23 +170,23 @@ def test_view_foreign_event(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["is_joined"] is False
-    assert set(response.json()["organizer"]) == {"id", "name", "photo_url", "telegram"}
+    assert set(response.json()["organizer"]) == {"id", "name", "avatar_id", "telegram"}
 
 
 # --- контакты организатора ---
 
-PHOTO = "https://example.com/anna.jpg"
-
 
 def test_organizer_telegram_hidden_from_outsider(client: TestClient) -> None:
-    organizer = register(client, ORGANIZER, telegram="@anna_org", photo_url=PHOTO)
+    organizer = register(client, ORGANIZER, telegram="@anna_org")
+    avatar_id = upload_avatar(client, organizer)
     outsider = register(client, OTHER)
     event = create_event(client, organizer)
 
     body = get_event(client, outsider, event["id"]).json()
 
     assert body["organizer"]["telegram"] is None
-    assert body["organizer"]["photo_url"] == PHOTO
+    assert body["organizer"]["avatar_id"] == avatar_id
+    assert "photo_url" not in body["organizer"]
     assert "phone" not in body["organizer"]
     assert "email" not in body["organizer"]
     catalog_item = client.get("/api/events", headers=auth_header(outsider)).json()["items"][0]

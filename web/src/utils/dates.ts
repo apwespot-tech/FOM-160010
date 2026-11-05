@@ -129,3 +129,13 @@ export function currentWeekRange(now: Date = new Date()): { from: Date; to: Date
   const daysToSunday = (7 - today.getDay()) % 7
   return { from: today, to: addDays(today, daysToSunday) }
 }
+
+const monthGenitive = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
+
+/** «На сайте с ноября 2023 года» по дате регистрации. */
+export function formatMemberSince(iso: string): string {
+  const date = new Date(iso)
+  // Месяц в родительном падеже берём из формата «5 ноября»
+  const month = monthGenitive.formatToParts(date).find((part) => part.type === 'month')?.value
+  return `На сайте с ${month ?? ''} ${date.getFullYear()} года`
+}

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * Участники мероприятия: фото или инициалы, имя, Telegram ссылкой;
+ * Участники мероприятия: аватар или инициалы, имя (ссылки на профиль), Telegram ссылкой;
  * автору и админу — «Исключить» у каждого, кроме организатора.
  */
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { RouterLink } from 'vue-router'
 
 import type { Participant } from '@/api/events'
 import PersonAvatar from '@/components/PersonAvatar.vue'
@@ -37,9 +38,26 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
         class="participants__item"
         data-testid="participant"
       >
-        <PersonAvatar :name="participant.name" :photo-url="participant.photo_url" />
+        <RouterLink
+          :to="`/users/${participant.id}`"
+          :aria-label="`Профиль: ${participant.name}`"
+          tabindex="-1"
+          class="participants__avatar-link"
+        >
+          <PersonAvatar
+            :name="participant.name"
+            :user-id="participant.id"
+            :avatar-id="participant.avatar_id"
+          />
+        </RouterLink>
         <div class="participants__info">
-          <span class="participants__name app-break">{{ participant.name }}</span>
+          <RouterLink
+            :to="`/users/${participant.id}`"
+            class="participants__name app-break"
+            data-testid="participant-name"
+          >
+            {{ participant.name }}
+          </RouterLink>
           <a
             v-if="participant.telegram"
             :href="telegramUrl(participant.telegram)"
@@ -115,6 +133,19 @@ const emit = defineEmits<{ remove: [participant: Participant] }>()
 
 .participants__name {
   font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
+.participants__name:hover,
+.participants__name:focus-visible {
+  color: var(--p-primary-700);
+  text-decoration: underline;
+}
+
+.participants__avatar-link {
+  display: inline-flex;
+  border-radius: 50%;
 }
 
 .participants__telegram {

@@ -19,7 +19,7 @@ const items = computed<MenuItem[]>(() => [
   {
     label: 'Профиль',
     icon: 'pi pi-user',
-    command: () => void router.push('/profile'),
+    command: () => void router.push(`/users/${session.profile?.id ?? ''}`),
   },
   { separator: true },
   {

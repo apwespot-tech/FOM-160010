@@ -103,7 +103,7 @@ describe('Меню профиля', () => {
     expect(header).toContain('+7 999 123-45-67')
 
     bodyGet('[data-testid="menu-profile"]').click()
-    await waitForPath(router, '/profile')
+    await waitForPath(router, `/users/${completeProfile.id}`)
     expect(document.body.querySelector('[data-testid="profile-menu-header"]')).toBeNull()
   })
 

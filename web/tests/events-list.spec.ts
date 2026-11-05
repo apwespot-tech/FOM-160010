@@ -318,7 +318,7 @@ describe('Карточка мероприятия в списке', () => {
           organizer: {
             id: completeProfile.id,
             name: 'Анна Иванова',
-            photo_url: null,
+            avatar_id: null,
             telegram: null,
           },
         }),

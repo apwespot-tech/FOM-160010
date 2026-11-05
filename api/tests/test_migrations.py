@@ -80,3 +80,40 @@ def test_migration_creates_thumbs_for_existing_photos(migrated_db: str) -> None:
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
         engine.dispose()
+
+
+def test_migration_sets_moscow_for_existing_events(migrated_db: str) -> None:
+    config = alembic_config(migrated_db)
+    engine = create_engine(migrated_db)
+    user_id, event_id = uuid.uuid4(), uuid.uuid4()
+    try:
+        command.downgrade(config, "0004")
+        # Мероприятие, созданное до появления городов
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (:id, '+79995550002')"), {"id": user_id}
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO events (id, organizer_id, category_id, title, description, place, "
+                    "starts_at, max_participants, min_age) VALUES (:id, :user, 1, 't', 'd', 'p', "
+                    "now() + interval '1 day', 5, 0)"
+                ),
+                {"id": event_id, "user": user_id},
+            )
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as conn:
+            city = conn.execute(
+                text(
+                    "SELECT c.name FROM events e JOIN cities c ON c.id = e.city_id WHERE e.id = :id"
+                ),
+                {"id": event_id},
+            ).scalar_one()
+        assert city == "Москва"
+    finally:
+        command.upgrade(config, "head")
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        engine.dispose()
