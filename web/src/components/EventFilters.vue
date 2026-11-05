@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Панель фильтров списка: поиск по названию, категория, даты, минимум свободных мест,
+ * Панель фильтров списка: поиск по названию, город, категория, даты, минимум свободных мест,
  * быстрые фильтры и «Сбросить». На мобильной ширине поиск и быстрые фильтры видны
  * всегда, а остальные поля — в окне «Фильтры (N)».
  */
@@ -15,11 +15,14 @@ import Select from 'primevue/select'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { useCategories } from '@/composables/useCategories'
+import { useCities } from '@/composables/useCities'
 import { MAX_FREE_PLACES, MAX_SEARCH_LENGTH } from '@/composables/useEventListQuery'
+import { useSessionStore } from '@/stores/session'
 import { useIsMobile } from '@/utils/breakpoints'
 import { currentWeekRange, toIsoDate } from '@/utils/dates'
 
 const props = defineProps<{
+  cityId: number | null
   categoryId: number | null
   from: Date | null
   to: Date | null
@@ -33,6 +36,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   change: [
     patch: {
+      cityId?: number | null
       categoryId?: number | null
       from?: Date | null
       to?: Date | null
@@ -44,10 +48,26 @@ const emit = defineEmits<{
 }>()
 
 const { categories } = useCategories()
+const { cities } = useCities()
+const session = useSessionStore()
 const isMobile = useIsMobile()
 const dialogVisible = ref(false)
 
 const categoryOptions = computed(() => [{ id: null, name: 'Все категории' }, ...categories.value])
+
+/** «Все города», город из профиля с подписью «ваш город», остальные по алфавиту без повтора. */
+const cityOptions = computed(() => {
+  const own = session.profile?.city ?? null
+  return [
+    { id: null, name: 'Все города', own: false },
+    ...(own ? [{ ...own, own: true }] : []),
+    ...cities.value.filter((city) => city.id !== own?.id).map((city) => ({ ...city, own: false })),
+  ]
+})
+
+function onCity(value: unknown) {
+  emit('change', { cityId: typeof value === 'number' ? value : null })
+}
 
 /** Значение календаря из адреса: один день показывается как диапазон [день, день]. */
 function rangeFromProps(): (Date | null)[] | null {
@@ -181,6 +201,26 @@ function reset() {
 
       <template v-if="!isMobile">
         <Select
+          :model-value="cityId"
+          :options="cityOptions"
+          option-label="name"
+          option-value="id"
+          placeholder="Все города"
+          filter
+          filter-placeholder="Найти город"
+          aria-label="Город"
+          class="event-filters__field"
+          data-testid="filter-city"
+          @update:model-value="onCity"
+        >
+          <template #option="{ option }">
+            <span class="event-filters__city-option" data-testid="filter-city-option">
+              {{ option.name }}
+              <span v-if="option.own" class="event-filters__city-own">ваш город</span>
+            </span>
+          </template>
+        </Select>
+        <Select
           :model-value="categoryId"
           :options="categoryOptions"
           option-label="name"
@@ -279,6 +319,28 @@ function reset() {
     >
       <div class="event-filters__dialog-fields">
         <div class="app-field">
+          <label for="filter-city-mobile">Город</label>
+          <Select
+            input-id="filter-city-mobile"
+            :model-value="cityId"
+            :options="cityOptions"
+            option-label="name"
+            option-value="id"
+            placeholder="Все города"
+            filter
+            filter-placeholder="Найти город"
+            data-testid="filter-city-mobile"
+            @update:model-value="onCity"
+          >
+            <template #option="{ option }">
+              <span class="event-filters__city-option">
+                {{ option.name }}
+                <span v-if="option.own" class="event-filters__city-own">ваш город</span>
+              </span>
+            </template>
+          </Select>
+        </div>
+        <div class="app-field">
           <label for="filter-category-mobile">Категория</label>
           <Select
             input-id="filter-category-mobile"
@@ -366,6 +428,22 @@ function reset() {
   .event-filters__fields {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  /* Пять полей в одну строку на 1024 px не помещаются: поиск — отдельной строкой */
+  .event-filters__search {
+    grid-column: 1 / -1;
+  }
+}
+
+.event-filters__city-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.event-filters__city-own {
+  color: var(--app-text-muted);
+  font-size: 0.8125rem;
 }
 
 .event-filters__search,

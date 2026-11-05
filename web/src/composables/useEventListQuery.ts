@@ -9,6 +9,8 @@ export type EventTab = 'find' | 'joined' | 'organized'
 export interface EventListState {
   tab: EventTab
   period: EventPeriod
+  /** Город; null — все города */
+  cityId: number | null
   categoryId: number | null
   from: Date | null
   to: Date | null
@@ -42,12 +44,14 @@ export function parseListQuery(query: LocationQuery): EventListState {
   const tab: EventTab = rawTab === 'joined' || rawTab === 'organized' ? rawTab : 'find'
   const period: EventPeriod =
     tab !== 'find' && single(query.period) === 'past' ? 'past' : 'upcoming'
+  const city = Number(single(query.city))
   const category = Number(single(query.category))
   const places = Number(single(query.places))
   const search = (single(query.q) ?? '').trim()
   return {
     tab,
     period,
+    cityId: Number.isInteger(city) && city > 0 ? city : null,
     categoryId: Number.isInteger(category) && category > 0 ? category : null,
     from: parseDate(single(query.from)),
     to: parseDate(single(query.to)),
@@ -62,6 +66,7 @@ export function buildListQuery(state: EventListState): LocationQueryRaw {
   const query: LocationQueryRaw = {}
   if (state.tab !== 'find') query.tab = state.tab
   if (state.tab !== 'find' && state.period === 'past') query.period = 'past'
+  if (state.cityId !== null) query.city = String(state.cityId)
   if (state.categoryId !== null) query.category = String(state.categoryId)
   if (state.from) query.from = toIsoDate(state.from)
   if (state.to) query.to = toIsoDate(state.to)
@@ -76,6 +81,7 @@ export function toListParams(state: EventListState): EventListParams {
   const params: EventListParams = { scope: TAB_SCOPE[state.tab] }
   if (state.tab !== 'find') params.period = state.period
   if (state.minFreePlaces !== null) params.min_free_places = state.minFreePlaces
+  if (state.cityId !== null) params.city_id = state.cityId
   if (state.categoryId !== null) params.category_id = state.categoryId
   const range = dateRangeToParams(state.from, state.to)
   if (range.from) params.from = range.from
@@ -94,6 +100,7 @@ export function useEventListQuery() {
   const params = computed(() => toListParams(state.value))
   const activeFilters = computed(
     () =>
+      (state.value.cityId !== null ? 1 : 0) +
       (state.value.categoryId !== null ? 1 : 0) +
       (state.value.from || state.value.to ? 1 : 0) +
       (state.value.minFreePlaces !== null ? 1 : 0),
@@ -111,7 +118,14 @@ export function useEventListQuery() {
   }
 
   function resetFilters(): void {
-    update({ categoryId: null, from: null, to: null, minFreePlaces: null, search: '' })
+    update({
+      cityId: null,
+      categoryId: null,
+      from: null,
+      to: null,
+      minFreePlaces: null,
+      search: '',
+    })
   }
 
   return { state, params, activeFilters, hasActive, update, resetFilters }

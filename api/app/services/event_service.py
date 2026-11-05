@@ -188,6 +188,7 @@ def list_events(
     limit: int,
     offset: int,
     search: str | None = None,
+    city_id: int | None = None,
 ) -> tuple[list[EventView], int]:
     if scope is EventScope.ALL and period is EventPeriod.PAST:
         raise AppError(
@@ -195,6 +196,9 @@ def list_events(
             "past_requires_scope",
             "Прошедшие мероприятия доступны только в разделах «Участвую» и «Организую»",
         )
+
+    if city_id is not None:
+        _ensure_city_exists(session, city_id)
 
     viewer_id = viewer.id
     conditions: list[ColumnElement[bool]] = []
@@ -222,6 +226,8 @@ def list_events(
         conditions.append(Event.max_participants - _participants_count() >= min_free_places)
     if category_id is not None:
         conditions.append(Event.category_id == category_id)
+    if city_id is not None:
+        conditions.append(Event.city_id == city_id)
     if starts_from is not None:
         conditions.append(Event.starts_at >= starts_from)
     if starts_to is not None:

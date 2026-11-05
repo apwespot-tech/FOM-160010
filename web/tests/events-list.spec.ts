@@ -1,12 +1,15 @@
 import DatePicker from 'primevue/datepicker'
 import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { EventItem } from '@/api/events'
+import type { Profile } from '@/api/profile'
 import { buildListQuery, parseListQuery, toListParams } from '@/composables/useEventListQuery'
 
 import {
   categories,
+  cities,
   completeProfile,
   errorResponse,
   eventItem,
@@ -25,12 +28,19 @@ function page(items: EventItem[], total = items.length) {
   return jsonResponse(200, { items, total })
 }
 
-function listApi(handler: (request: MockRequest) => Response | Promise<Response>) {
+// Справочник по алфавиту, как его отдаёт сервер
+const sortedCities = [...cities].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+
+function listApi(
+  handler: (request: MockRequest) => Response | Promise<Response>,
+  profile: Profile = completeProfile,
+) {
   const api = mockApi({
     'GET /events': handler,
     'GET /categories': () => jsonResponse(200, categories),
+    'GET /cities': () => jsonResponse(200, sortedCities),
   })
-  withStoredSession(api, completeProfile)
+  withStoredSession(api, profile)
   return api
 }
 
@@ -77,6 +87,7 @@ describe('Состояние списка в адресе', () => {
     expect(state).toEqual({
       tab: 'find',
       period: 'upcoming',
+      cityId: null,
       categoryId: null,
       from: null,
       to: null,
@@ -91,6 +102,7 @@ describe('Состояние списка в адресе', () => {
       buildListQuery({
         tab: 'find',
         period: 'upcoming',
+        cityId: null,
         categoryId: null,
         from: null,
         to: null,
@@ -102,13 +114,38 @@ describe('Состояние списка в адресе', () => {
       buildListQuery({
         tab: 'organized',
         period: 'past',
+        cityId: 5,
         categoryId: 2,
         from: null,
         to: null,
         minFreePlaces: 4,
         search: ' йога ',
       }),
-    ).toEqual({ tab: 'organized', period: 'past', category: '2', places: '4', q: 'йога' })
+    ).toEqual({
+      tab: 'organized',
+      period: 'past',
+      city: '5',
+      category: '2',
+      places: '4',
+      q: 'йога',
+    })
+  })
+
+  it('город: на всех вкладках уходит в city_id, некорректный отбрасывается', () => {
+    expect(parseListQuery({ city: '5' }).cityId).toBe(5)
+    expect(toListParams(parseListQuery({ city: '5' }))).toEqual({ scope: 'all', city_id: 5 })
+    expect(toListParams(parseListQuery({ tab: 'joined', city: '5' }))).toEqual({
+      scope: 'joined',
+      period: 'upcoming',
+      city_id: 5,
+    })
+    expect(toListParams(parseListQuery({ tab: 'organized', city: '5' }))).toMatchObject({
+      scope: 'organized',
+      city_id: 5,
+    })
+    for (const city of ['abc', '0', '-1', '2.5']) {
+      expect(parseListQuery({ city }).cityId).toBeNull()
+    }
   })
 
   it('поиск: обрезка пробелов, слишком длинный отбрасывается', () => {
@@ -193,8 +230,9 @@ describe('Фильтры и состояние списка', () => {
   it('«Сбросить» удаляет фильтры из адреса и загружает список без них', async () => {
     const api = listApi(() => page([eventItem()]))
     const { wrapper, router } = await renderApp(
-      '/?category=3&from=2026-12-01&to=2026-12-02&places=2',
+      '/?city=5&category=3&from=2026-12-01&to=2026-12-02&places=2',
     )
+    expect(lastListQuery(api).get('city_id')).toBe('5')
     expect(lastListQuery(api).get('category_id')).toBe('3')
     expect(lastListQuery(api).get('min_free_places')).toBe('2')
 
@@ -203,21 +241,26 @@ describe('Фильтры и состояние списка', () => {
 
     expect(router.currentRoute.value.query).toEqual({})
     const query = lastListQuery(api)
-    expect(['category_id', 'from', 'to', 'min_free_places'].some((key) => query.has(key))).toBe(
-      false,
-    )
+    expect(
+      ['city_id', 'category_id', 'from', 'to', 'min_free_places'].some((key) => query.has(key)),
+    ).toBe(false)
   })
 
   it('на мобильном фильтры за кнопкой с числом активных', async () => {
     listApi(() => page([eventItem()]))
     setViewportWidth(360)
-    const { wrapper } = await renderApp('/?category=3&from=2026-12-01&to=2026-12-02&places=2')
+    const { wrapper } = await renderApp('/?city=5&category=3&places=2')
 
     // Поиск и быстрые фильтры видны, остальные поля — в окне «Фильтры»
     expect(wrapper.find('[data-testid="filter-search"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="quick-free-places"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="filter-category"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="filter-city"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="filters-button"]').text()).toContain('Фильтры (3)')
+
+    await wrapper.get('[data-testid="filters-button"]').trigger('click')
+    await settle()
+    expect(bodyGet('[data-testid="filter-city-mobile"]').textContent).toContain('Казань')
   })
 
   it('«Свободных мест от»: параметр в запросе и в адресе', async () => {
@@ -607,5 +650,129 @@ describe('Обновление списка без скачков', () => {
     expect(lastListQuery(api).get('q')).toBe('маф')
     expect(wrapper.findAll('[data-testid="event-card"]')).toHaveLength(0)
     expect(wrapper.find('[data-testid="events-error"]').exists()).toBe(true)
+  })
+})
+
+describe('Фильтр по городу в списке', () => {
+  type CityOption = { id: number | null; name: string; own: boolean }
+  type App = Awaited<ReturnType<typeof renderApp>>
+
+  function citySelect(wrapper: App['wrapper']) {
+    const select = wrapper
+      .findAllComponents(Select)
+      .find((item) => item.attributes('data-testid') === 'filter-city')
+    if (!select) throw new Error('Нет поля «Город»')
+    return select
+  }
+
+  function optionNames(wrapper: App['wrapper']): string[] {
+    return (citySelect(wrapper).props('options') as CityOption[]).map((option) =>
+      option.own ? option.name + ' (ваш город)' : option.name,
+    )
+  }
+
+  function renderedOptions(): string[] {
+    return [
+      ...document.body.querySelectorAll<HTMLElement>('[data-testid="filter-city-option"]'),
+    ].map((option) => (option.textContent ?? '').replace(/\s+/g, ' ').trim())
+  }
+
+  it('по умолчанию «Все города»: запрос без city_id, в адресе нет city', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper, router } = await renderApp('/')
+
+    expect(citySelect(wrapper).text()).toContain('Все города')
+    expect(lastListQuery(api).has('city_id')).toBe(false)
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('город из профиля вторым после «Все города», без повтора', async () => {
+    listApi(() => page([eventItem()]))
+    const { wrapper } = await renderApp('/')
+
+    expect(optionNames(wrapper)).toEqual([
+      'Все города',
+      'Москва (ваш город)',
+      'Казань',
+      'Санкт-Петербург',
+    ])
+  })
+
+  it('без города в профиле — все города по алфавиту', async () => {
+    listApi(() => page([eventItem()]), { ...completeProfile, city: null })
+    const { wrapper } = await renderApp('/')
+
+    expect(optionNames(wrapper)).toEqual(['Все города', 'Казань', 'Москва', 'Санкт-Петербург'])
+  })
+
+  it('подпись «ваш город» в выпадающем списке', async () => {
+    listApi(() => page([eventItem()]))
+    const { wrapper } = await renderApp('/')
+
+    citySelect(wrapper).vm.show()
+    await settle()
+
+    expect(renderedOptions().slice(0, 3)).toEqual(['Все города', 'Москва ваш город', 'Казань'])
+  })
+
+  it('выбор города и возврат ко всем городам', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper, router } = await renderApp('/')
+
+    citySelect(wrapper).vm.$emit('update:modelValue', 5)
+    await settle()
+    expect(router.currentRoute.value.query).toEqual({ city: '5' })
+    expect(lastListQuery(api).get('city_id')).toBe('5')
+    expect(wrapper.find('[data-testid="filters-reset"]').exists()).toBe(true)
+
+    citySelect(wrapper).vm.$emit('update:modelValue', null)
+    await settle()
+    expect(router.currentRoute.value.query).toEqual({})
+    expect(lastListQuery(api).has('city_id')).toBe(false)
+  })
+
+  it('поиск в списке городов без учёта регистра', async () => {
+    listApi(() => page([eventItem()]))
+    const { wrapper } = await renderApp('/')
+
+    expect(citySelect(wrapper).props('filter')).toBe(true)
+    citySelect(wrapper).vm.show()
+    await settle()
+    const input = bodyGet('.p-select-filter') as HTMLInputElement
+    input.value = 'каз'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+
+    expect(renderedOptions()).toEqual(['Казань'])
+  })
+
+  it('город сохраняется при переходе на вкладку «Участвую»', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper, router } = await renderApp('/?city=5')
+
+    await wrapper.get('[data-testid="tab-joined"]').trigger('click')
+    await settle()
+
+    expect(router.currentRoute.value.query).toEqual({ tab: 'joined', city: '5' })
+    expect(lastListQuery(api).get('scope')).toBe('joined')
+    expect(lastListQuery(api).get('city_id')).toBe('5')
+    expect(citySelect(wrapper).text()).toContain('Казань')
+  })
+
+  it('ссылка с городом на вкладке «Организую»', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper } = await renderApp('/?tab=organized&city=5')
+
+    expect(lastListQuery(api).get('scope')).toBe('organized')
+    expect(lastListQuery(api).get('city_id')).toBe('5')
+    expect(citySelect(wrapper).text()).toContain('Казань')
+  })
+
+  it('некорректный город в адресе игнорируется', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper } = await renderApp('/?city=abc')
+
+    expect(citySelect(wrapper).text()).toContain('Все города')
+    expect(lastListQuery(api).has('city_id')).toBe(false)
   })
 })

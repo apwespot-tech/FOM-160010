@@ -95,6 +95,7 @@ function retry() {
       </div>
 
       <EventFilters
+        :city-id="state.cityId"
         :category-id="state.categoryId"
         :from="state.from"
         :to="state.to"

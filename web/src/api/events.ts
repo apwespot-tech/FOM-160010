@@ -91,6 +91,8 @@ export interface EventListParams {
   /** Не меньше N свободных мест */
   min_free_places?: number
   category_id?: number
+  /** Город мероприятия */
+  city_id?: number
   /** ISO 8601 с часовым поясом */
   from?: string
   to?: string

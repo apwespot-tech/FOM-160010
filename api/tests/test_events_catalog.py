@@ -360,3 +360,83 @@ def test_search_counts_with_other_filters(client: TestClient) -> None:
 
     assert titles(response) == ["Кино ночью"]
     assert response.json()["total"] == 1
+
+
+# --- фильтр по городу ---
+
+
+def city_id(client: TestClient, user: dict[str, Any], name: str) -> int:
+    cities = client.get("/api/cities", headers=auth_header(user)).json()
+    found: int = next(city["id"] for city in cities if city["name"] == name)
+    return found
+
+
+def test_city_filter(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    kazan = city_id(client, organizer, "Казань")
+    create_event(client, organizer, starts_at=at(1))
+    in_kazan = [
+        create_event(client, organizer, city_id=kazan, starts_at=at(days))["id"] for days in (2, 3)
+    ]
+
+    body = catalog(client, organizer, city_id=kazan).json()
+
+    assert [item["id"] for item in body["items"]] == in_kazan
+    assert {item["city"]["name"] for item in body["items"]} == {"Казань"}
+    assert body["total"] == 2
+    assert catalog(client, organizer).json()["total"] == 3
+
+
+def test_city_filter_with_other_filters(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    kazan = city_id(client, organizer, "Казань")
+    match = create_event(client, organizer, city_id=kazan, category_id=3)
+    create_event(client, organizer, city_id=kazan, category_id=1)
+    create_event(client, organizer, category_id=3)
+    create_event(client, organizer, city_id=kazan, category_id=3, max_participants=2)
+    full = catalog(client, organizer, city_id=kazan).json()["items"]
+    assert len(full) == 3
+
+    body = catalog(client, organizer, city_id=kazan, category_id=3, min_free_places=2).json()
+
+    assert [item["id"] for item in body["items"]] == [match["id"]]
+    assert body["total"] == 1
+
+
+def test_city_filter_joined_past(client: TestClient, clock: FakeClock) -> None:
+    organizer = register(client, ORGANIZER)
+    other = register(client, OTHER, name="Борис")
+    kazan = city_id(client, organizer, "Казань")
+    in_moscow = create_event(client, organizer, starts_at=at(0.01))
+    in_kazan = create_event(client, organizer, city_id=kazan, starts_at=at(0.01))
+    for event in (in_moscow, in_kazan):
+        response = client.post(f"/api/events/{event['id']}/join", headers=auth_header(other))
+        assert response.status_code == 200
+    clock.advance(60 * 60)
+    other = {**other, **login(client, OTHER)}
+
+    body = catalog(
+        client, other, scope="joined", period="past", city_id=in_moscow["city"]["id"]
+    ).json()
+
+    assert [item["id"] for item in body["items"]] == [in_moscow["id"]]
+
+
+def test_city_without_events(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    create_event(client, organizer)
+    response = catalog(client, organizer, city_id=city_id(client, organizer, "Сочи"))
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+def test_city_filter_unknown_city(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    response = catalog(client, organizer, city_id=999999)
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "city_not_found"
+
+
+def test_city_filter_invalid_value(client: TestClient) -> None:
+    organizer = register(client, ORGANIZER)
+    assert catalog(client, organizer, city_id="abc").status_code == 422
