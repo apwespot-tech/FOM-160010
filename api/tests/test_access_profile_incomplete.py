@@ -34,6 +34,9 @@ OPEN_TO_DRAFT = {
     ("GET", "/api/events/{event_id}"),
     ("GET", "/api/events/{event_id}/photos/{photo_id}"),
     ("GET", "/api/users/{user_id}/images/{image_id}"),
+    ("GET", "/api/notifications"),
+    ("GET", "/api/notifications/unread-count"),
+    ("POST", "/api/notifications/read"),
 }
 
 PARAM_VALUES = {"category_id": "1", "city_id": "1", "kind": "avatar"}

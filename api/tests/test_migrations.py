@@ -1,4 +1,5 @@
-"""Миграции с переносом данных: 0004 (картинки категорий, копии фото), 0005 (город), 0006."""
+"""Миграции с переносом данных: 0004 (картинки категорий, копии фото), 0005 (город), 0006;
+обратимость 0007 и 0008."""
 
 import uuid
 from io import BytesIO
@@ -158,6 +159,30 @@ def test_migration_0007_reviews_roundtrip(migrated_db: str) -> None:
         command.upgrade(config, "head")
         with engine.connect() as conn:
             assert conn.execute(text("SELECT to_regclass('reviews')")).scalar() == "reviews"
+    finally:
+        command.upgrade(config, "head")
+        engine.dispose()
+
+
+def test_migration_0008_notifications_roundtrip(migrated_db: str) -> None:
+    config = alembic_config(migrated_db)
+    engine = create_engine(migrated_db)
+    try:
+        command.downgrade(config, "0007")
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT to_regclass('notifications')")).scalar() is None
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM pg_type WHERE typname = 'notification_type'")
+                ).scalar()
+                == 0
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            assert (
+                conn.execute(text("SELECT to_regclass('notifications')")).scalar()
+                == "notifications"
+            )
     finally:
         command.upgrade(config, "head")
         engine.dispose()

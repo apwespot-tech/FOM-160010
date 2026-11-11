@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Телефоны администраторов через запятую
     admin_phones: str = ""
 
+    # Интервал фонового процесса (напоминания об окне отзывов), секунды
+    worker_interval_seconds: int = Field(default=300, ge=1)
+
     @property
     def admin_phone_set(self) -> frozenset[str]:
         return frozenset(

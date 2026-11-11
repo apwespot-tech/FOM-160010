@@ -19,7 +19,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-При старте контейнер `api` применяет миграции БД. Frontend (dev-сервер Vite) проксирует `/api` в контейнер `api`, поэтому в браузере всё работает на одном адресе.
+При старте контейнер `api` применяет миграции БД. Контейнер `worker` — фоновый процесс: раз в `WORKER_INTERVAL_SECONDS` (по умолчанию 300 с) создаёт напоминания «оцените участников», когда открывается окно отзывов; его журнал — `docker compose logs worker`. Frontend (dev-сервер Vite) проксирует `/api` в контейнер `api`, поэтому в браузере всё работает на одном адресе.
 
 | Сервис | Адрес |
 |---|---|
@@ -58,8 +58,9 @@ SMS не отправляются. При `AUTH_TEST_ENDPOINTS=true` сайт п
 5. К мероприятию можно прикрепить до 10 фото (JPEG, PNG, WebP до 2 МБ) в окне создания или в режиме редактирования; первое — основное. Фото сохраняются по «Создать»/«Сохранить» и показываются галереей в окне мероприятия.
 6. Профиль — страница `/users/<id>` (пункт «Профиль» в меню): аватар, обложка, «О себе», интересы, город и счётчики мероприятий. Профили организатора и участников открываются из окна мероприятия; чужой профиль виден тем, кто был с человеком на одном мероприятии.
 7. Город мероприятия обязателен: в окне создания по умолчанию подставляется город из профиля.
+8. Колокольчик в шапке — уведомления: об изменении и удалении мероприятия, исключении, записи и отказе участников (организатору) и напоминание оценить участников. Точка на колокольчике — есть непрочитанные; открытие панели отмечает их прочитанными.
 
-Ручки API (`GET /api/categories` и картинка категории `GET /api/categories/{id}/covers/{cover_id}`, `/api/events` с параметрами `scope`, `period` и `q`, `join`, `leave`, участники, фото `PUT /api/events/{id}/photos` и `GET /api/events/{id}/photos/{photo_id}` с `?size=thumb` для уменьшенной копии, города `GET /api/cities`, профиль `GET /api/profile/{id}`, аватар и обложка `PUT`/`DELETE /api/profile/avatar|cover` и `GET /api/users/{id}/images/{image_id}`) с примерами — в Swagger: http://localhost:8000/api/docs.
+Ручки API (`GET /api/categories` и картинка категории `GET /api/categories/{id}/covers/{cover_id}`, `/api/events` с параметрами `scope`, `period` и `q`, `join`, `leave`, участники, фото `PUT /api/events/{id}/photos` и `GET /api/events/{id}/photos/{photo_id}` с `?size=thumb` для уменьшенной копии, города `GET /api/cities`, профиль `GET /api/profile/{id}`, аватар и обложка `PUT`/`DELETE /api/profile/avatar|cover` и `GET /api/users/{id}/images/{image_id}`, уведомления `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/read`) с примерами — в Swagger: http://localhost:8000/api/docs.
 
 ## Тесты и проверки
 
