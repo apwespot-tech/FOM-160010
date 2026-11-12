@@ -99,6 +99,7 @@ function clearEmailError() {
           input-id="profile-birth-date"
           :invalid="controller.errorFor('birthDate') !== null"
           @update:model-value="onBirthDate"
+          @blur="controller.touch('birthDate')"
         />
         <small
           v-if="controller.errorFor('birthDate')"

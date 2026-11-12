@@ -46,8 +46,18 @@ let request = 0
 
 async function load(append = false): Promise<void> {
   const current = ++request
-  loading.value = true
   loadError.value = false
+  // Отзывов этого вида нет — запрос не нужен. Заодно черновик не получает 403
+  // `profile_incomplete` на своём профиле, где отзывов ещё быть не может.
+  const count =
+    kind.value === 'organizer' ? props.ratings.as_organizer : props.ratings.as_participant
+  if (!append && count.count === 0) {
+    items.value = []
+    total.value = 0
+    loading.value = false
+    return
+  }
+  loading.value = true
   try {
     const page = await listUserReviews(props.userId, kind.value, append ? items.value.length : 0)
     if (current !== request) return

@@ -775,4 +775,15 @@ describe('Фильтр по городу в списке', () => {
     expect(citySelect(wrapper).text()).toContain('Все города')
     expect(lastListQuery(api).has('city_id')).toBe(false)
   })
+
+  it('несуществующие город и категория в адресе сбрасываются', async () => {
+    const api = listApi(() => page([eventItem()]))
+    const { wrapper, router } = await renderApp('/?city=999&category=999')
+    await settle()
+
+    expect(citySelect(wrapper).text()).toContain('Все города')
+    expect(lastListQuery(api).has('city_id')).toBe(false)
+    expect(lastListQuery(api).has('category_id')).toBe(false)
+    expect(router.currentRoute.value.query).toEqual({})
+  })
 })

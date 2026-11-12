@@ -7,6 +7,7 @@ import {
   categories,
   cities,
   completeProfile,
+  errorResponse,
   jsonResponse,
   mockApi,
   type MockHandler,
@@ -185,6 +186,23 @@ describe('Отзывы в профиле', () => {
     await openProfile({})
     expect(text('reviews-empty')).toBe('Отзывов пока нет')
   })
+
+  it('счётчики по нулям: отзывы не запрашиваются, ошибки нет', async () => {
+    const empty: Profile = {
+      ...otherProfile,
+      ratings: {
+        as_organizer: { average: null, count: 0 },
+        as_participant: { average: null, count: 0 },
+      },
+    }
+    const { api } = await openProfile({}, completeProfile, empty, {
+      [`GET /users/${OTHER_ID}/reviews`]: () => errorResponse(403, 'profile_incomplete'),
+    })
+    await click(find('reviews-tab-participant'))
+
+    expect(api.calls(`GET /users/${OTHER_ID}/reviews`)).toHaveLength(0)
+    expect(text('reviews-empty')).toBe('Отзывов пока нет')
+  })
 })
 
 describe('Удаление отзыва администратором', () => {
@@ -227,7 +245,8 @@ describe('Удаление отзыва администратором', () => {
   })
 
   it('на своём профиле кнопок «Удалить» нет', async () => {
-    await openProfile({ organizer: [review(1)] }, completeProfile, completeProfile)
+    const own: Profile = { ...completeProfile, ratings: otherProfile.ratings }
+    await openProfile({ organizer: [review(1)] }, own, own)
     expect(find('review-item')).not.toBeNull()
     expect(find('review-admin-delete')).toBeNull()
   })
