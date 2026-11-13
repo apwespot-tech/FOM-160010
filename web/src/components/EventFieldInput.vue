@@ -2,6 +2,8 @@
 /**
  * Поле ввода мероприятия по имени поля с ошибкой под ним. Одни и те же поля стоят
  * в окне создания и на местах значений при редактировании на странице мероприятия.
+ * Числовым полям не задаём верхнюю границу и нижнюю выше 0: InputNumber молча подменяет
+ * значение вне диапазона, а пользователь должен увидеть ошибку поля (её даёт validate).
  */
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
@@ -15,12 +17,12 @@ import DateTimeInput from '@/components/DateTimeInput.vue'
 import { injectEventForm } from '@/composables/eventFormContext'
 import { useCategories } from '@/composables/useCategories'
 import { useCities } from '@/composables/useCities'
-import { MAX_PARTICIPANTS, type EventField } from '@/composables/useEventForm'
+import type { EventField } from '@/composables/useEventForm'
 import { formatMinAge } from '@/utils/format'
 
 const props = defineProps<{ field: EventField; inputId: string; ariaLabel?: string }>()
 
-const { form, errorFor, touch, minParticipants } = injectEventForm()
+const { form, errorFor, touch } = injectEventForm()
 const { categories } = useCategories()
 const { cities } = useCities()
 
@@ -129,8 +131,7 @@ function setMinAge(value: unknown) {
       v-else-if="field === 'durationMinutes'"
       :input-id="inputId"
       :model-value="form.durationMinutes"
-      :min="1"
-      :max="1440"
+      :min="0"
       :use-grouping="false"
       suffix=" мин"
       placeholder="Не указана"
@@ -143,8 +144,7 @@ function setMinAge(value: unknown) {
       v-else-if="field === 'maxParticipants'"
       :input-id="inputId"
       :model-value="form.maxParticipants"
-      :min="minParticipants"
-      :max="MAX_PARTICIPANTS"
+      :min="0"
       :use-grouping="false"
       show-buttons
       button-layout="horizontal"

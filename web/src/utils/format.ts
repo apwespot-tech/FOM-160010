@@ -58,7 +58,7 @@ export function telegramUrl(telegram: string): string {
 /** «осталось 7 свободных мест» */
 export function formatFreePlaces(free: number): string {
   if (free <= 0) return 'свободных мест нет'
-  const left = plural(free, ['остался', 'осталось', 'осталось'])
+  // «место» среднего рода: «осталось» во всех формах («осталось 1 свободное место»)
   const places = plural(free, ['свободное место', 'свободных места', 'свободных мест'])
-  return `${left} ${free} ${places}`
+  return `осталось ${free} ${places}`
 }

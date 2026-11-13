@@ -271,6 +271,39 @@ describe('Создание мероприятия', () => {
     await vi.waitFor(() => expect(dialogOpen()).toBe(false))
   })
 
+  it('после создания список за окном перезагружается', async () => {
+    const { api, router } = await openCreateDialog()
+    setInput('[data-testid="field-title"]', 'Футбол в парке')
+    await chooseCategory('Спорт')
+    setInput('[data-testid="field-starts-at-native"]', '2026-11-01T19:00')
+    setInput('[data-testid="field-place"]', 'Парк Горького')
+    setInput('[data-testid="field-description"]', 'Играем 5 на 5')
+    await settle()
+    const listLoads = api.calls('GET /events').length
+
+    bodyGet('[data-testid="create-event-submit"]').click()
+    await waitForPath(router, '/events/new-1')
+
+    await vi.waitFor(() => expect(api.calls('GET /events').length).toBeGreaterThan(listLoads))
+  })
+
+  it.each([
+    ['field-max-participants', '1', 'error-max-participants', 'Не меньше 2'],
+    ['field-max-participants', '101', 'error-max-participants', 'Не больше 100'],
+    ['field-duration-minutes', '2000', 'error-duration-minutes', 'От 1 до 1440 минут'],
+  ])('ввод %s = %s не подменяется, а даёт ошибку «%s»', async (field, value, errorId, message) => {
+    await openCreateDialog()
+    const input = bodyGet(`[data-testid="${field}"] input`) as HTMLInputElement
+    input.focus()
+    input.value = value
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, data: value }))
+    input.dispatchEvent(new Event('blur'))
+    await settle()
+
+    expect(input.value).toContain(value)
+    expect(bodyGet(`[data-testid="${errorId}"]`).textContent).toContain(message)
+  })
+
   it('на мобильном окно во весь экран', async () => {
     await openCreateDialog(360)
     expect(bodyGet('[data-testid="create-event-dialog"]').className).toContain(

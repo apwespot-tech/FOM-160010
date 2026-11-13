@@ -5,7 +5,10 @@ import { setViewportWidth } from './helpers/media'
 import { bodyGet, renderApp, settle, waitForPath, withStoredSession } from './helpers/render'
 
 function completeSession() {
-  const api = mockApi({ 'GET /events': () => jsonResponse(200, { items: [], total: 0 }) })
+  const api = mockApi({
+    'GET /events': () => jsonResponse(200, { items: [], total: 0 }),
+    'GET /notifications/unread-count': () => jsonResponse(200, { unread_count: 0 }),
+  })
   withStoredSession(api, completeProfile)
   return api
 }
@@ -22,7 +25,7 @@ describe('Шапка приложения', () => {
     expect(wrapper.get('[data-testid="profile-menu-button"]').text()).toBe('АИ')
   })
 
-  it('правый блок по макету: аватар — квадрат с инициалами, на колокольчике нет счётчика', async () => {
+  it('правый блок по макету: аватар — квадрат с инициалами, без непрочитанных на колокольчике нет точки и счётчика', async () => {
     completeSession()
     const { wrapper } = await renderApp('/profile')
 
@@ -35,6 +38,7 @@ describe('Шапка приложения', () => {
     const bell = wrapper.get('[data-testid="notifications-button"]')
     expect(bell.find('.p-badge').exists()).toBe(false)
     expect(bell.text()).toBe('')
+    expect(wrapper.find('[data-testid="notifications-dot"]').exists()).toBe(false)
   })
 
   it('на мобильном: без ссылки «Мероприятия», кнопки — иконки с доступными именами', async () => {
@@ -152,21 +156,5 @@ describe('Меню профиля', () => {
 
     expect(document.body.querySelector('[data-testid="profile-menu-header"]')).toBeNull()
     expect(router.currentRoute.value.path).toBe('/')
-  })
-})
-
-describe('Уведомления', () => {
-  it('панель-заглушка без запросов к серверу', async () => {
-    const api = completeSession()
-    const { wrapper } = await renderApp('/profile')
-    const before = api.requests.length
-
-    await wrapper.get('[data-testid="notifications-button"]').trigger('click')
-    await settle()
-
-    const panel = bodyGet('[data-testid="notifications-panel"]').textContent ?? ''
-    expect(panel).toContain('Уведомления')
-    expect(panel).toContain('Уведомлений пока нет')
-    expect(api.requests.length).toBe(before)
   })
 })

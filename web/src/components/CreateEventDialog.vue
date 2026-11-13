@@ -40,11 +40,10 @@ watch(visible, (open) => {
 async function onSubmit() {
   const wasCreated = created.value !== null
   const event = await submit()
-  if (!event) {
-    // Мероприятие создано, фото — нет: показать его в списке за окном
-    if (!wasCreated && created.value) notifyCreated()
-    return
-  }
+  // Мероприятие только что создано (даже если фото не сохранились) — показать его в списке
+  // (`created` заполнен только при частичном сохранении, при полном успехе приходит `event`)
+  if (!wasCreated && (event || created.value)) notifyCreated()
+  if (!event) return
   close()
   await router.push(`/events/${event.id}`)
 }

@@ -159,8 +159,10 @@ async function load(): Promise<void> {
     notFound.value = false
   } catch (error) {
     event.value = null
-    if (error instanceof ApiError && error.status === 404) notFound.value = true
-    else loadError.value = true
+    // 422 — в адресе не UUID: такого мероприятия тоже нет, «Повторить» не поможет
+    if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
+      notFound.value = true
+    } else loadError.value = true
     return
   }
   await Promise.all([loadParticipants(), loadMyReviews()])

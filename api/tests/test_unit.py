@@ -1,6 +1,7 @@
 """Unit-тесты без HTTP: телефоны, токены, схемы профиля."""
 
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
 
 import jwt
@@ -235,3 +236,44 @@ def test_latest_birth_date_for_14(today: date, expected: date) -> None:
     assert latest_birth_date(today, 14) == expected
     assert calculate_age(expected, today) == 14
     assert calculate_age(expected + timedelta(days=1), today) == 13
+
+
+# --- фоновый процесс ---
+
+
+def test_worker_run_once_passes_current_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import worker
+
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
+    calls: list[datetime] = []
+
+    def fake_create(session: object, at: datetime) -> int:
+        calls.append(at)
+        return 3
+
+    monkeypatch.setattr(worker.notification_service, "create_review_reminders", fake_create)
+
+    assert worker.run_once(lambda: nullcontext(), lambda: now) == 3  # type: ignore[arg-type]
+    assert calls == [now]
+
+
+def test_worker_run_once_survives_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import worker
+
+    def failing(session: object, at: datetime) -> int:
+        raise RuntimeError("таблицы ещё нет")
+
+    monkeypatch.setattr(worker.notification_service, "create_review_reminders", failing)
+
+    now = datetime(2026, 11, 2, tzinfo=UTC)
+    assert worker.run_once(lambda: nullcontext(), lambda: now) == 0  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("interval", [0, -5])
+def test_worker_interval_must_be_positive(interval: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            database_url="postgresql+psycopg://x",
+            jwt_secret="s" * 32,
+            worker_interval_seconds=interval,
+        )

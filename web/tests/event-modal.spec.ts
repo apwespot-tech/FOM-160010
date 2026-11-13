@@ -172,6 +172,15 @@ describe('Окно мероприятия поверх списка', () => {
     expect(text('event-not-found')).toContain('К мероприятиям')
   })
 
+  it('в адресе не UUID (422): «Мероприятие не найдено» без «Повторить»', async () => {
+    await openEvent(eventItem(), {
+      'GET /events/e1': () => jsonResponse(422, { detail: [{ loc: ['path', 'event_id'] }] }),
+    })
+
+    expect(text('event-not-found')).toContain('Мероприятие не найдено')
+    expect(document.body.querySelector('[data-testid="event-load-error"]')).toBeNull()
+  })
+
   it('на мобильном — во весь экран', async () => {
     setViewportWidth(360)
     await openEvent(eventItem())

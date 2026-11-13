@@ -27,6 +27,20 @@ services:
     volumes:
       - ./api:/app
 
+  # Фоновый процесс: напоминания об окне отзывов. Миграции применяет только api
+  worker:
+    build: ./api
+    env_file: .env
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ./api:/app
+
   web:
     build: ./web
     environment:

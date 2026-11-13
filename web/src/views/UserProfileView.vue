@@ -74,7 +74,8 @@ async function load(): Promise<void> {
   try {
     other.value = await getUserProfile(userId.value)
   } catch (error) {
-    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+    // 422 — в адресе не UUID: показываем тот же экран, не раскрывая подробностей
+    if (error instanceof ApiError && [403, 404, 422].includes(error.status)) {
       unavailable.value = true
     } else {
       loadError.value = true

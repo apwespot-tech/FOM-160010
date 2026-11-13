@@ -10,12 +10,14 @@ import SelectButton from 'primevue/selectbutton'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { RouterView } from 'vue-router'
 
 import type { EventPeriod } from '@/api/events'
 import EventFilters from '@/components/EventFilters.vue'
 import EventListCard from '@/components/EventListCard.vue'
+import { useCategories } from '@/composables/useCategories'
+import { useCities } from '@/composables/useCities'
 import { useCreateEventDialog } from '@/composables/useCreateEventDialog'
 import { provideEventListUpdates, useEventList } from '@/composables/useEventList'
 import { useEventListQuery, type EventTab } from '@/composables/useEventListQuery'
@@ -25,8 +27,31 @@ const { items, total, loading, refreshing, error, reload, loadMore, replaceItem,
   useEventList(params)
 provideEventListUpdates({ replaceItem, removeItem })
 const { open: openCreate, onEventCreated } = useCreateEventDialog()
-// Мероприятие создано, а окно создания ещё открыто (не сохранились фото) — показать его в списке
+// Создано новое мероприятие (в том числе когда окно ещё открыто из-за фото) — показать его в списке
 onBeforeUnmount(onEventCreated(() => void reload()))
+
+// Города или категории из адреса нет в справочнике — сбрасываем фильтр, как некорректное значение:
+// иначе поле показывает «Все …», а список пуст из-за невидимого фильтра
+const { categories } = useCategories()
+const { cities } = useCities()
+watch(
+  [() => state.value.categoryId, () => state.value.cityId, categories, cities],
+  ([categoryId, cityId]) => {
+    const patch: { categoryId?: null; cityId?: null } = {}
+    if (
+      categoryId !== null &&
+      categories.value.length &&
+      !categories.value.some((c) => c.id === categoryId)
+    ) {
+      patch.categoryId = null
+    }
+    if (cityId !== null && cities.value.length && !cities.value.some((c) => c.id === cityId)) {
+      patch.cityId = null
+    }
+    if (Object.keys(patch).length) update(patch)
+  },
+  { immediate: true },
+)
 
 const periodOptions: { value: EventPeriod; label: string }[] = [
   { value: 'upcoming', label: 'Предстоящие' },

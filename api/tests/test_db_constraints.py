@@ -14,6 +14,8 @@ from app.models import (
     EventParticipant,
     EventPhoto,
     EventPhotoData,
+    Notification,
+    NotificationType,
     RefreshToken,
     Review,
     ReviewKind,
@@ -361,4 +363,65 @@ def test_review_survives_event_delete(db: Session) -> None:
     db.expire_all()
 
     row = db.execute(select(Review.event_id, Review.event_title)).one()
+    assert row == (None, "Настолки")
+
+
+# --- уведомления ---
+
+
+def _notification(event: Event, user: User, **overrides: object) -> Notification:
+    fields: dict[str, object] = {
+        "user_id": user.id,
+        "type": NotificationType.EVENT_DELETED,
+        "event_id": event.id,
+        "event_title": event.title,
+        "created_at": NOW,
+    }
+    fields.update(overrides)
+    return Notification(**fields)
+
+
+def test_notification_participant_required_by_type(db: Session) -> None:
+    event, user, _ = _review_setup(db)
+    db.add(_notification(event, user, type=NotificationType.PARTICIPANT_JOINED))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_notification_participant_forbidden_for_other_types(db: Session) -> None:
+    event, user, other = _review_setup(db)
+    db.add(_notification(event, user, participant_id=other.id))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_notification_changed_fields_required_by_type(db: Session) -> None:
+    event, user, _ = _review_setup(db)
+    db.add(_notification(event, user, type=NotificationType.EVENT_CHANGED))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_review_reminder_unique_per_user_and_event(db: Session) -> None:
+    event, user, other = _review_setup(db)
+    db.add(_notification(event, user, type=NotificationType.REVIEW_REMINDER))
+    # Другой тип для той же пары и напоминание другому пользователю допустимы
+    db.add(_notification(event, user))
+    db.add(_notification(event, other, type=NotificationType.REVIEW_REMINDER))
+    db.commit()
+    db.add(_notification(event, user, type=NotificationType.REVIEW_REMINDER))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_notification_survives_event_delete(db: Session) -> None:
+    event, user, _ = _review_setup(db)
+    db.add(_notification(event, user, event_title="Настолки"))
+    db.commit()
+
+    db.execute(delete(Event).where(Event.id == event.id))
+    db.commit()
+    db.expire_all()
+
+    row = db.execute(select(Notification.event_id, Notification.event_title)).one()
     assert row == (None, "Настолки")

@@ -113,6 +113,36 @@ describe('Проверка полей формы профиля', () => {
     expect(api.calls('PATCH /profile')).toHaveLength(0)
   })
 
+  it('дата младше 14 лет, введённая вручную, не стирается, а даёт ошибку', async () => {
+    const { api, wrapper } = await filledEditor()
+    const younger = maxBirthDate()
+    younger.setDate(younger.getDate() + 1)
+    const typed = [younger.getDate(), younger.getMonth() + 1]
+      .map((part) => String(part).padStart(2, '0'))
+      .concat(String(younger.getFullYear()))
+      .join('.')
+    const input = wrapper.get('#profile-birth-date')
+
+    await input.setValue(typed)
+    await input.trigger('blur')
+    await settle()
+
+    expect((input.element as HTMLInputElement).value).toBe(typed)
+    expect(wrapper.get('[data-testid="error-birth-date"]').text()).toBe(
+      'Сервисом можно пользоваться с 14 лет',
+    )
+    await submitForm(wrapper)
+    expect(api.calls('PATCH /profile')).toHaveLength(0)
+  })
+
+  it('пустая дата рождения: ошибка после ухода из поля', async () => {
+    const { wrapper } = await filledEditor()
+    await wrapper.get('#profile-birth-date').trigger('blur')
+    await settle()
+
+    expect(wrapper.get('[data-testid="error-birth-date"]').text()).toBe('Укажите дату рождения')
+  })
+
   it('дата раньше 01.01.1900 не отправляется', async () => {
     const { api, wrapper } = await filledEditor()
     await setBirthDate(wrapper, new Date(1899, 11, 31))
@@ -343,7 +373,7 @@ describe('Просмотр профиля', () => {
     expect(wrapper.find('[data-testid="profile-share"]').exists()).toBe(true)
   })
 
-  it.each([403, 404])('ответ %i — «Профиль недоступен»', async (status) => {
+  it.each([403, 404, 422])('ответ %i — «Профиль недоступен»', async (status) => {
     const api = ownProfileApi()
     api.on('GET /profile/u2', () => errorResponse(status, status === 403 ? 'forbidden' : 'nf'))
     const { wrapper } = await renderApp('/users/u2')

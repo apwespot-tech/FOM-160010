@@ -26,6 +26,7 @@ from app.errors import AppError, forbidden, not_found
 from app.models import Category, City, Event, EventParticipant, EventPhoto, ReviewKind, User
 from app.schemas.event import EventCreate, EventUpdate, EventView, ParticipantOut
 from app.schemas.review import rating_value
+from app.services import notification_service
 from app.services.dictionary_service import missing_reference_error
 from app.services.rating_service import rating_subquery
 
@@ -286,8 +287,16 @@ def update_event(
             "Лимит не может быть меньше числа записавшихся участников",
         )
 
+    before = {field: getattr(event, field) for field in notification_service.NOTIFY_FIELDS}
     for field in fields:
         setattr(event, field, getattr(data, field))
+    changed = [
+        field
+        for field in notification_service.NOTIFY_FIELDS
+        if field in fields and getattr(event, field) != before[field]
+    ]
+    if changed:
+        notification_service.notify_event_changed(session, now, event, user, changed)
     with _missing_reference_as_not_found(session):
         session.commit()
 
@@ -296,6 +305,7 @@ def delete_event(session: Session, now: datetime, user: User, event_id: uuid.UUI
     event = _lock_event(session, event_id)
     _ensure_can_manage(event, user)
     _ensure_not_started(event, now)
+    notification_service.notify_event_deleted(session, now, event, user)
     session.delete(event)
     session.commit()
 
@@ -315,6 +325,7 @@ def join_event(session: Session, now: datetime, user: User, event_id: uuid.UUID)
         raise AppError(409, "event_full", "Свободных мест нет")
 
     session.add(EventParticipant(event_id=event.id, user_id=user.id, joined_at=now))
+    notification_service.notify_participant_joined(session, now, event, user.id)
     try:
         session.commit()
     except IntegrityError as exc:
@@ -329,6 +340,7 @@ def leave_event(session: Session, now: datetime, user: User, event_id: uuid.UUID
         raise organizer_cannot_leave()
     if not _delete_participant(session, event.id, user.id):
         raise AppError(409, "not_joined", "Вы не записаны на это мероприятие")
+    notification_service.notify_participant_left(session, now, event, user.id)
     session.commit()
 
 
@@ -342,6 +354,7 @@ def remove_participant(
         raise organizer_cannot_leave()
     if not _delete_participant(session, event.id, participant_id):
         raise AppError(404, "participant_not_found", "Пользователь не записан на мероприятие")
+    notification_service.notify_participant_removed(session, now, event, user, participant_id)
     session.commit()
 
 
