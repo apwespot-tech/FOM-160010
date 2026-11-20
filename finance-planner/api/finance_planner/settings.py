@@ -54,7 +54,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    "ninja",
+    "users",
 ]
+
+AUTH_USER_MODEL = "users.User"
+SESSION_ENGINE = "finance_planner.sessions"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -116,3 +121,27 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Трассировки необработанных ошибок и записи django.security о подозрительных запросах должны попасть в журнал
+# контейнера и при DJANGO_DEBUG=false, а консольный журнал Django в этом режиме молчит
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "finance_planner": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

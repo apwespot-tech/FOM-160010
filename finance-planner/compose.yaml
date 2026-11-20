@@ -21,6 +21,9 @@ services:
       - config/.env
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      # Тест контракта читает таблицу маршрутов docs/api.md. Папка только для чтения, Compose Watch её не касается
+      - ./docs:/docs:ro
     depends_on:
       db:
         condition: service_healthy
