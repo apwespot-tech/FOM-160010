@@ -23,6 +23,9 @@ finance-planner/
 │   └── uv.lock                 точные версии зависимостей Python
 ├── config/
 │   └── .env.example            образец переменных окружения
+├── docs/
+│   ├── api.md                  API-контракт: соглашения, ошибки, маршруты
+│   └── architecture.md         архитектура, модель данных, компромиссы
 ├── web/                        интерфейс на Vue 3 и TypeScript
 │   ├── public/                 значок сайта
 │   ├── src/
@@ -48,6 +51,8 @@ finance-planner/
 ├── compose.yaml                запуск базы, API и интерфейса
 └── README.md
 ```
+
+Устройство сервиса, модель данных и принятые компромиссы описаны в [docs/architecture.md](docs/architecture.md), контракт API в [docs/api.md](docs/api.md).
 
 ## 3. Стек технологий
 
