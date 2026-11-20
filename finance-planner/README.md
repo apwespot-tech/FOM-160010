@@ -19,7 +19,7 @@ finance-planner/
 │   ├── Dockerfile
 │   ├── healthcheck.py          проверка контейнера для Docker
 │   ├── manage.py
-│   ├── pyproject.toml          зависимости
+│   ├── pyproject.toml          зависимости, настройки pytest и Ruff
 │   └── uv.lock                 точные версии зависимостей Python
 ├── config/
 │   └── .env.example            образец переменных окружения
@@ -68,6 +68,10 @@ finance-planner/
 | API | Django Ninja | 1.7.1 | REST API и описание OpenAPI |
 | API | psycopg | 3.3.6 | Драйвер PostgreSQL |
 | API | uv | 0.13.5 | Установка зависимостей Python по `uv.lock` |
+| API | pytest | 9.2.0 | Запуск тестов API |
+| API | pytest-django | 4.14.0 | Тесты с настройками и тестовой базой Django |
+| API | Hypothesis | 6.170.17 | Тесты на случайно сгенерированных данных |
+| API | Ruff | 0.17.6 | Линтер кода Python |
 | База данных | PostgreSQL | 18 | Хранение данных |
 | Окружение | Node.js | 24 LTS | Среда для Vite в контейнере |
 | Окружение | Docker Compose | 2.22 и новее | Запуск сервисов и синхронизация файлов |
@@ -81,7 +85,6 @@ finance-planner/
 5. Интерфейс обращается к API через прокси Vite по своему же адресу, поэтому настраивать CORS не нужно.
 6. Django Ninja строит описание API в формате OpenAPI и страницу документации `/api/docs`.
 7. В режиме watch Docker Compose сразу переносит изменённые файлы в контейнеры, а после правки зависимостей или Dockerfile пересобирает образ.
-8. Два теста Django проверяют ответ `/api/health` при доступной и при недоступной базе.
 
 ## 5. Как пользоваться
 
@@ -139,12 +142,15 @@ docker compose ps
 curl http://127.0.0.1:8000/api/health
 ```
 
-Тесты Django и проверка типов со сборкой интерфейса:
+Тесты API запускает pytest, пока их два: они проверяют ответ `/api/health` при доступной и при недоступной базе. Ruff ищет в коде API ошибки и устаревшие конструкции Python. Он же следит за оформлением: порядок и вид импортов, двойные кавычки, длина строк, пробелы в конце строк. Последняя команда проверяет типы и собирает интерфейс:
 
 ```bash
-docker compose exec api python manage.py test
-docker compose run --rm --no-deps web npm run build
+docker compose exec api pytest
+docker compose exec api ruff check .
+docker compose run --rm --no-deps --build web npm run build
 ```
+
+Тесты и Ruff работают с кодом внутри контейнера `api`. Без `--watch` изменения на компьютере туда не попадают, поэтому после правки кода API сервисы сначала пересобираются командой `docker compose up -d --build --wait`. Сборка интерфейса с ключом `--build` сама пересобирает образ `web` и всегда идёт по текущему коду.
 
 Остановка сервисов. Данные базы остаются в томе `postgres_data`:
 
@@ -154,7 +160,7 @@ docker compose down
 
 Команда `docker compose down -v` удаляет и том с данными базы. Она нужна, например, после смены `POSTGRES_PASSWORD`: пароль задаётся при первом создании базы и сам не меняется.
 
-Новая зависимость добавляется в `pyproject.toml` или `package.json`, после чего lock-файл пересобирается одноразовым контейнером. Команды ниже для PowerShell:
+Новая зависимость записывается в `pyproject.toml` или в `package.json`, после чего lock-файл пересобирается одноразовым контейнером. Инструменты тестов и проверки кода Python идут в группу `dev` файла `pyproject.toml`. Команды ниже для PowerShell:
 
 ```powershell
 docker run --rm -v "${PWD}/api:/app" -w /app python:3.14-slim sh -c "pip install --quiet --root-user-action=ignore uv==0.13.5 && uv lock"
@@ -180,10 +186,11 @@ docker run --rm -v "${PWD}/web:/app" -w /app node:24-alpine npm install --packag
 | `POSTGRES_HOST` | Адрес базы для API | `db` |
 | `POSTGRES_PORT` | Порт базы | `5432` |
 
-Остальное задано в `compose.yaml`:
+Остальное задано в `compose.yaml` и `api/Dockerfile`:
 
 | Параметр | Значение | Назначение |
 | --- | :---: | --- |
+| `INSTALL_DEV` | `true` | Аргумент сборки образа API, `true` или `false`: ставить ли группу `dev` (pytest, pytest-django, Hypothesis и Ruff). Образ без неё собирается под своим тегом, чтобы не заменить образ разработки: `docker build --build-arg INSTALL_DEV=false -t finance-planner-api:no-dev ./api` |
 | Порт интерфейса | 127.0.0.1:5173 | Vite, открыт только для этого компьютера |
 | Порт API | 127.0.0.1:8000 | Django, открыт только для этого компьютера |
 | Порт базы | не открыт | PostgreSQL доступна только внутри сети Docker |

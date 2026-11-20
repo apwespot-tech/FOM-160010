@@ -15,8 +15,15 @@ WORKDIR /app
 
 RUN chown app:app /app
 
+ARG INSTALL_DEV=true
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv <<EOF
+case "$INSTALL_DEV" in
+    true) uv sync --locked ;;
+    false) uv sync --locked --no-dev ;;
+    *) echo "Аргумент INSTALL_DEV принимает значения true или false, а получено: $INSTALL_DEV" >&2; exit 1 ;;
+esac
+EOF
 
 COPY --chown=app:app . .
 

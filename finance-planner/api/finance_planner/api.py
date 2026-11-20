@@ -5,7 +5,7 @@ import django
 from django.db import connection
 from django.db.utils import DatabaseError
 from django.http import HttpRequest
-from ninja import NinjaAPI, Schema
+from ninja import NinjaAPI, Schema, Status
 
 
 class DatabaseHealth(Schema):
@@ -42,7 +42,7 @@ def measure_database() -> DatabaseHealth:
 
 
 @api.get("/health", response={200: ServiceHealth, 503: ServiceHealth})
-def health(request: HttpRequest):
+def health(request: HttpRequest) -> Status[ServiceHealth]:
     database_health = measure_database()
     service_status = "ok"
     status_code = 200
@@ -58,4 +58,4 @@ def health(request: HttpRequest):
         database=database_health,
     )
 
-    return status_code, payload
+    return Status(status_code, payload)
