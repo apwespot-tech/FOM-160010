@@ -159,15 +159,6 @@ onMounted(() => {
     font-variant-numeric: tabular-nums;
 }
 
-.section-title {
-    margin-bottom: 1rem;
-    color: var(--color-text-secondary);
-    font-size: 0.875rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
 .services {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));

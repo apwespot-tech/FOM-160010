@@ -76,7 +76,7 @@ async function save(): Promise<void> {
 
 <template>
     <Dialog v-model:visible="isVisible" header="Профиль" modal :draggable="false" class="profile-dialog">
-        <form class="profile-dialog__form" novalidate @submit.prevent="save">
+        <form class="dialog-form" novalidate @submit.prevent="save">
             <dl class="profile-dialog__facts">
                 <dt>Логин</dt>
                 <dd>{{ username }}</dd>
@@ -96,7 +96,7 @@ async function save(): Promise<void> {
 
             <Message v-if="formError" severity="error" :closable="false">{{ formError }}</Message>
 
-            <div class="profile-dialog__actions">
+            <div class="dialog-form__actions">
                 <Button type="submit" :label="saveLabel" :loading="isSaving" :disabled="isSaving" />
                 <Button type="button" label="Отмена" severity="secondary" outlined :disabled="isSaving" @click="close" />
             </div>
@@ -105,12 +105,6 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
-.profile-dialog__form {
-    display: grid;
-    gap: 1.25rem;
-    width: min(28rem, calc(100vw - 4rem));
-}
-
 .profile-dialog__facts {
     display: flex;
     gap: 0.75rem;
@@ -123,11 +117,5 @@ async function save(): Promise<void> {
 .profile-dialog__facts dd {
     font-weight: 600;
     overflow-wrap: anywhere;
-}
-
-.profile-dialog__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
 }
 </style>
