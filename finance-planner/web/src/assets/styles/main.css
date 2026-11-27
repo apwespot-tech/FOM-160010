@@ -129,6 +129,11 @@ a:focus-visible {
     color: var(--color-text-secondary);
 }
 
+.auth-form {
+    display: grid;
+    gap: 1rem;
+}
+
 .auth-links {
     display: flex;
     flex-wrap: wrap;

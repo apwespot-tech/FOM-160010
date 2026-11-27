@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQueryClient } from "@tanstack/vue-query";
 import Button from "primevue/button";
-import { computed, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { useNotifier } from "../composables/useNotifier";
@@ -21,6 +21,9 @@ const NAVIGATION_LINKS: NavigationLink[] = [
     { routeName: "recurring", label: "Периодические" },
 ];
 
+// Диалог с выбором пояса нужен редко, поэтому его код грузится при первом открытии, а не вместе с каждой страницей
+const ProfileDialog = defineAsyncComponent(() => import("./ProfileDialog.vue"));
+
 const HOME_ROUTE = { name: "dashboard" };
 const LOGIN_ROUTE = { name: "login" };
 
@@ -32,6 +35,8 @@ const { notifyError } = useNotifier();
 
 const isMenuOpen = ref(false);
 const isLoggingOut = ref(false);
+const isProfileOpen = ref(false);
+const hasOpenedProfile = ref(false);
 
 const username = computed(() => session.currentUser?.username ?? "");
 const menuClasses = computed(() => ({ "app-header__menu--open": isMenuOpen.value }));
@@ -42,6 +47,11 @@ function toggleMenu(): void {
 
 function buildLinkTarget(link: NavigationLink): { name: string } {
     return { name: link.routeName };
+}
+
+function openProfile(): void {
+    hasOpenedProfile.value = true;
+    isProfileOpen.value = true;
 }
 
 async function logOut(): Promise<void> {
@@ -104,9 +114,14 @@ watch(
 
                     <div class="app-header__user">
                         <span class="app-header__username" :title="username">{{ username }}</span>
-                        <Button label="Выйти" severity="secondary" size="small" outlined :loading="isLoggingOut" @click="logOut" />
+                        <div class="app-header__user-actions">
+                            <Button label="Профиль" severity="secondary" size="small" text @click="openProfile" />
+                            <Button label="Выйти" severity="secondary" size="small" outlined :loading="isLoggingOut" @click="logOut" />
+                        </div>
                     </div>
                 </div>
+
+                <ProfileDialog v-if="hasOpenedProfile" v-model:visible="isProfileOpen" />
             </template>
 
             <RouterLink v-else class="app-header__login-link" :to="LOGIN_ROUTE">Войти</RouterLink>
@@ -235,6 +250,12 @@ watch(
     gap: 0.75rem;
     min-width: 0;
     margin-left: auto;
+}
+
+.app-header__user-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .app-header__username {

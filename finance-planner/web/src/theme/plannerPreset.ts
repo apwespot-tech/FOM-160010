@@ -1,9 +1,58 @@
 import { definePreset } from "@primeuix/themes";
 import Aura from "@primeuix/themes/aura";
 
+const SEVERITY_COLORS = {
+    success: "var(--color-success)",
+    info: "var(--color-accent)",
+    warn: "var(--color-warning)",
+    error: "var(--color-danger)",
+};
+
+// Красный Aura на своём полупрозрачном фоне даёт контраст около 3.7:1, цвета палитры дают от 4.7:1
+function buildMessageSeverity(color: string) {
+    return {
+        background: `color-mix(in srgb, ${color}, transparent 84%)`,
+        borderColor: `color-mix(in srgb, ${color}, transparent 64%)`,
+        color,
+        outlined: { color, borderColor: color },
+        simple: { color },
+    };
+}
+
+function buildToastSeverity(color: string) {
+    return {
+        background: `color-mix(in srgb, ${color}, transparent 84%)`,
+        borderColor: `color-mix(in srgb, ${color}, transparent 64%)`,
+        color,
+        detailColor: "var(--color-text)",
+    };
+}
+
 // Тёмная схема Aura берёт цвета из переменных палитры main.css: компоненты PrimeVue совпадают с остальными страницами,
 // а текст не становится чисто белым, как в Aura по умолчанию
 export const plannerPreset = definePreset(Aura, {
+    components: {
+        message: {
+            colorScheme: {
+                dark: {
+                    success: buildMessageSeverity(SEVERITY_COLORS.success),
+                    info: buildMessageSeverity(SEVERITY_COLORS.info),
+                    warn: buildMessageSeverity(SEVERITY_COLORS.warn),
+                    error: buildMessageSeverity(SEVERITY_COLORS.error),
+                },
+            },
+        },
+        toast: {
+            colorScheme: {
+                dark: {
+                    success: buildToastSeverity(SEVERITY_COLORS.success),
+                    info: buildToastSeverity(SEVERITY_COLORS.info),
+                    warn: buildToastSeverity(SEVERITY_COLORS.warn),
+                    error: buildToastSeverity(SEVERITY_COLORS.error),
+                },
+            },
+        },
+    },
     semantic: {
         primary: {
             50: "#eef3fd",

@@ -52,7 +52,7 @@ export const useSessionStore = defineStore("session", () => {
         rememberUser(await authApi.logIn(username, password));
     }
 
-    async function register(username: string, password: string, timeZone: string): Promise<void> {
+    async function register(username: string, password: string, timeZone: string | null): Promise<void> {
         rememberUser(await authApi.register(username, password, timeZone));
     }
 

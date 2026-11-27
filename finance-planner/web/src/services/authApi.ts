@@ -38,10 +38,17 @@ export async function logIn(username: string, password: string): Promise<User> {
     return toUser(body);
 }
 
-export async function register(username: string, password: string, timeZone: string): Promise<User> {
+export async function register(username: string, password: string, timeZone: string | null): Promise<User> {
+    const requestBody: Record<string, string> = { username, password };
+
+    // Без пояса сервер подставит свой, поэтому пустое значение не отправляется
+    if (timeZone !== null) {
+        requestBody.time_zone = timeZone;
+    }
+
     const body = await requestJson<UserBody>("/api/auth/register", {
         method: "POST",
-        body: { username, password, time_zone: timeZone },
+        body: requestBody,
     });
 
     return toUser(body);
