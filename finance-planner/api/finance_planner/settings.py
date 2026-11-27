@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "ninja",
     "users",
+    "ledger",
 ]
 
 AUTH_USER_MODEL = "users.User"
