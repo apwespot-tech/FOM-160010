@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum, Value
+from django.db.models.functions import Coalesce
 
 MONEY_MAX_DIGITS = 14
 MONEY_DECIMAL_PLACES = 2
@@ -34,9 +36,45 @@ class OperationKind(models.TextChoices):
 CATEGORY_OPERATION_KINDS = [OperationKind.INCOME.value, OperationKind.EXPENSE.value]
 TRANSFER_OPERATION_KINDS = [OperationKind.TRANSFER_OUT.value, OperationKind.TRANSFER_IN.value]
 
+INCREASING_OPERATION_KINDS = [OperationKind.INCOME.value, OperationKind.TRANSFER_IN.value]
+DECREASING_OPERATION_KINDS = [OperationKind.EXPENSE.value, OperationKind.TRANSFER_OUT.value]
+
 # Доход и расход относятся к категории, операции перевода к переводу. Две ветки заодно ограничивают и список видов
 CATEGORY_OPERATION_CONDITION = Q(kind__in=CATEGORY_OPERATION_KINDS, category__isnull=False, transfer__isnull=True)
 TRANSFER_OPERATION_CONDITION = Q(kind__in=TRANSFER_OPERATION_KINDS, category__isnull=True, transfer__isnull=False)
+
+
+def build_money_field() -> models.DecimalField:
+    return models.DecimalField(max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES)
+
+
+def sum_operation_amounts(operation_kinds: list[str]) -> Coalesce:
+    kind_filter = Q(operations__kind__in=operation_kinds)
+    zero_amount = Value(Decimal("0"), output_field=build_money_field())
+
+    return Coalesce(Sum("operations__amount", filter=kind_filter), zero_amount, output_field=build_money_field())
+
+
+class AccountQuerySet(models.QuerySet):
+    def for_user(self, user: AbstractBaseUser) -> AccountQuerySet:
+        return self.filter(user=user)
+
+    def with_balance(self) -> AccountQuerySet:
+        # Баланс не хранится: начальный остаток плюс доходы и зачисления минус расходы и списания, одним запросом с группировкой
+        incoming_total = sum_operation_amounts(INCREASING_OPERATION_KINDS)
+        outgoing_total = sum_operation_amounts(DECREASING_OPERATION_KINDS)
+
+        return self.annotate(balance=F("initial_balance") + incoming_total - outgoing_total)
+
+
+class CategoryQuerySet(models.QuerySet):
+    def visible_to(self, user: AbstractBaseUser) -> CategoryQuerySet:
+        return self.filter(Q(user=user) | Q(user__isnull=True))
+
+
+class OperationQuerySet(models.QuerySet):
+    def for_user(self, user: AbstractBaseUser) -> OperationQuerySet:
+        return self.filter(user=user)
 
 
 class Account(models.Model):
@@ -47,6 +85,8 @@ class Account(models.Model):
     initial_balance = models.DecimalField("начальный остаток", max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES, default=Decimal("0"))
     is_archived = models.BooleanField("в архиве", default=False)
     created_at = models.DateTimeField("создан", auto_now_add=True)
+
+    objects = AccountQuerySet.as_manager()
 
     class Meta:
         verbose_name = "счёт"
@@ -74,6 +114,8 @@ class Category(models.Model):
 
     name = models.CharField("название", max_length=CATEGORY_NAME_MAX_LENGTH)
     kind = models.CharField("вид", max_length=8, choices=CategoryKind.choices)
+
+    objects = CategoryQuerySet.as_manager()
 
     class Meta:
         verbose_name = "категория"
@@ -161,6 +203,8 @@ class Operation(models.Model):
     )
 
     created_at = models.DateTimeField("создана", auto_now_add=True)
+
+    objects = OperationQuerySet.as_manager()
 
     class Meta:
         verbose_name = "операция"

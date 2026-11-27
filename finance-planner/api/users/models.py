@@ -1,3 +1,4 @@
+from datetime import date
 import functools
 import zoneinfo
 
@@ -5,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 TIME_ZONE_MAX_LENGTH = 64
 UNKNOWN_TIME_ZONE_MESSAGE = "Неизвестный часовой пояс"
@@ -37,3 +39,9 @@ class User(AbstractUser):
     # Функция вместо значения: иначе пояс сервера попал бы в миграцию и зависел от DJANGO_TIME_ZONE при её создании.
     # Валидатор нужен админке: пояс в обход API должен проходить ту же проверку
     time_zone = models.CharField("часовой пояс", max_length=TIME_ZONE_MAX_LENGTH, default=get_server_time_zone, validators=[validate_time_zone])
+
+    def get_today(self) -> date:
+        # «Сегодня» у каждого пользователя своё: даты операций сверяются с его часовым поясом, а не с поясом сервера
+        user_time_zone = zoneinfo.ZoneInfo(self.time_zone)
+
+        return timezone.localdate(timezone=user_time_zone)

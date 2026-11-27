@@ -8,6 +8,7 @@ from django.http.multipartparser import MultiPartParserError
 from ninja import NinjaAPI
 from ninja.errors import AuthenticationError, HttpError, Throttled, ValidationError
 
+from ledger.services import AccountInUseError, CategoryInUseError, CommonCategoryError, LedgerRuleError, TransferOperationError
 from users.api import CsrfTokenError
 from users.services import InvalidCredentialsError, UserRuleError
 
@@ -21,17 +22,25 @@ ERROR_DETAILS = {
     "not_authenticated": "Требуется вход",
     "invalid_credentials": "Неверный логин или пароль",
     "csrf_failed": "Нет токена CSRF или он устарел",
+    "common_category": "Общую категорию нельзя изменить или удалить",
     "not_found": "Объект не найден",
+    "account_in_use": "Счёт нельзя удалить: на него ссылаются операции. Его можно перенести в архив",
+    "category_in_use": "Категорию нельзя удалить: на неё ссылаются операции",
+    "transfer_operation": "Операция входит в перевод и меняется только вместе с ним",
     "too_many_requests": "Слишком много запросов. Повторите позже",
     "internal_error": "Внутренняя ошибка сервера",
 }
 
 FIXED_ERRORS = {
+    AccountInUseError: (HTTPStatus.CONFLICT, "account_in_use"),
     AuthenticationError: (HTTPStatus.UNAUTHORIZED, "not_authenticated"),
+    CategoryInUseError: (HTTPStatus.CONFLICT, "category_in_use"),
+    CommonCategoryError: (HTTPStatus.FORBIDDEN, "common_category"),
     CsrfTokenError: (HTTPStatus.FORBIDDEN, "csrf_failed"),
     Http404: (HTTPStatus.NOT_FOUND, "not_found"),
     InvalidCredentialsError: (HTTPStatus.UNAUTHORIZED, "invalid_credentials"),
     Throttled: (HTTPStatus.TOO_MANY_REQUESTS, "too_many_requests"),
+    TransferOperationError: (HTTPStatus.CONFLICT, "transfer_operation"),
     # Так Django сообщает о теле, которое нельзя прочитать: испорченная форма, уже прочитанная форма, оборванная отправка
     BadRequest: (HTTPStatus.BAD_REQUEST, "bad_request"),
     MultiPartParserError: (HTTPStatus.BAD_REQUEST, "bad_request"),
@@ -82,7 +91,7 @@ def build_rule_error(field_name: str, message: str) -> dict[str, object]:
     return {"type": "planner_rule", "loc": ["body", "payload", field_name], "msg": message}
 
 
-def handle_user_rule_error(request: HttpRequest, error: UserRuleError, api: NinjaAPI) -> HttpResponse:
+def handle_rule_error(request: HttpRequest, error: UserRuleError | LedgerRuleError, api: NinjaAPI) -> HttpResponse:
     field_errors = [build_rule_error(field_name, message) for field_name, message in error.field_errors]
 
     return handle_validation_error(request, ValidationError(field_errors), api)
@@ -102,5 +111,6 @@ def register_error_handlers(api: NinjaAPI) -> None:
     api.add_exception_handler(HttpError, partial(handle_http_error, api=api))
     api.add_exception_handler(SuspiciousOperation, partial(handle_suspicious_operation, api=api))
     api.add_exception_handler(ValidationError, partial(handle_validation_error, api=api))
-    api.add_exception_handler(UserRuleError, partial(handle_user_rule_error, api=api))
+    api.add_exception_handler(UserRuleError, partial(handle_rule_error, api=api))
+    api.add_exception_handler(LedgerRuleError, partial(handle_rule_error, api=api))
     api.add_exception_handler(Exception, partial(handle_unexpected_error, api=api))

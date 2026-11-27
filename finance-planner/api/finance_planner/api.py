@@ -9,6 +9,7 @@ from ninja import NinjaAPI, Schema, Status
 from ninja.security import django_auth
 
 from finance_planner.errors import register_error_handlers
+from ledger.api import accounts_router, categories_router, operations_router
 from users.api import router as users_router
 
 
@@ -28,6 +29,9 @@ class ServiceHealth(Schema):
 api = NinjaAPI(title="API финансового планера", version="0.1.0", auth=django_auth)
 register_error_handlers(api)
 api.add_router("/auth", users_router)
+api.add_router("/accounts", accounts_router)
+api.add_router("/categories", categories_router)
+api.add_router("/operations", operations_router)
 
 
 def measure_database() -> DatabaseHealth:
