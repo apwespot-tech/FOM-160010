@@ -1,5 +1,5 @@
 import vue from "@vitejs/plugin-vue";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 const defaultProxyTarget = "http://localhost:8000";
 const proxyTarget = process.env.API_PROXY_TARGET || defaultProxyTarget;
@@ -14,5 +14,10 @@ export default defineConfig({
                 target: proxyTarget,
             },
         },
+    },
+    test: {
+        // Тесты компонентов и функций, которым нужен document, идут в лёгком окружении браузера без самого браузера
+        environment: "happy-dom",
+        include: ["src/**/*.test.ts"],
     },
 });

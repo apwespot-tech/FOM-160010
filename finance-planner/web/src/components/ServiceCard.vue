@@ -37,7 +37,7 @@ function valueClass(detail: ServiceDetail): string {
                 <p class="service-card__technology">{{ technology }}</p>
             </div>
             <span class="status-badge" :class="badgeModifier">
-                <span class="status-badge__dot" aria-hidden="true"></span>
+                <span class="status-badge__dot" aria-hidden="true" />
                 <span>{{ stateLabel }}</span>
             </span>
         </header>

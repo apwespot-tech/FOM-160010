@@ -5,7 +5,12 @@ import django
 from django.db import connection
 from django.db.utils import DatabaseError
 from django.http import HttpRequest
-from ninja import NinjaAPI, Schema
+from ninja import NinjaAPI, Schema, Status
+from ninja.security import django_auth
+
+from finance_planner.errors import register_error_handlers
+from ledger.api import accounts_router, categories_router, operations_router
+from users.api import router as users_router
 
 
 class DatabaseHealth(Schema):
@@ -21,7 +26,12 @@ class ServiceHealth(Schema):
     database: DatabaseHealth
 
 
-api = NinjaAPI(title="API финансового планера", version="0.1.0")
+api = NinjaAPI(title="API финансового планера", version="0.1.0", auth=django_auth)
+register_error_handlers(api)
+api.add_router("/auth", users_router)
+api.add_router("/accounts", accounts_router)
+api.add_router("/categories", categories_router)
+api.add_router("/operations", operations_router)
 
 
 def measure_database() -> DatabaseHealth:
@@ -41,8 +51,8 @@ def measure_database() -> DatabaseHealth:
     return DatabaseHealth(status="ok", version=server_version, query_time_ms=round(elapsed_ms, 1))
 
 
-@api.get("/health", response={200: ServiceHealth, 503: ServiceHealth})
-def health(request: HttpRequest):
+@api.get("/health", auth=None, response={200: ServiceHealth, 503: ServiceHealth}, summary="Состояние API и базы")
+def health(request: HttpRequest) -> Status[ServiceHealth]:
     database_health = measure_database()
     service_status = "ok"
     status_code = 200
@@ -58,4 +68,4 @@ def health(request: HttpRequest):
         database=database_health,
     )
 
-    return status_code, payload
+    return Status(status_code, payload)

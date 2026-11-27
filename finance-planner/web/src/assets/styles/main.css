@@ -31,6 +31,7 @@
     --color-surface: #1b1f26;
     --color-surface-raised: #232831;
     --color-border: #2b313b;
+    --color-border-strong: #687384;
     --color-text: #dce1e8;
     --color-text-secondary: #a7b0bd;
     --color-text-tertiary: #8f99a7;
@@ -84,4 +85,146 @@ p,
 dl,
 dd {
     margin: 0;
+}
+
+a {
+    color: var(--color-accent);
+    text-underline-offset: 0.2em;
+}
+
+a:hover {
+    color: var(--color-accent-hover);
+}
+
+a:focus-visible {
+    outline: none;
+    border-radius: 0.25rem;
+    box-shadow: var(--focus-ring);
+}
+
+.page-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    margin-bottom: 1.75rem;
+}
+
+.page-heading__caption {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.page-heading__title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.auth-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.money {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.section-title {
+    margin-bottom: 1rem;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.state-card {
+    display: grid;
+    justify-items: start;
+    gap: 0.75rem;
+    max-width: 40rem;
+    padding: 1.25rem 1.375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-large);
+    background: var(--color-surface);
+}
+
+.state-card__title {
+    font-weight: 600;
+}
+
+.state-card__text {
+    color: var(--color-text-secondary);
+}
+
+.dialog-form {
+    display: grid;
+    gap: 1.25rem;
+    width: min(30rem, calc(100vw - 4rem));
+}
+
+.dialog-form__fact {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+.dialog-form__checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+}
+
+.dialog-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.auth-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.9375rem;
+}
+
+.inline-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+@media (max-width: 40rem) {
+    .page-heading__title {
+        font-size: 1.5rem;
+    }
+}
+
+/* Стили PrimeVue сами не учитывают эту настройку: мигание заглушек, вращение индикаторов и переходы диалогов
+   отключаются здесь. Длительность не нулевая, чтобы переходы Vue всё равно получили событие окончания */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
 }
