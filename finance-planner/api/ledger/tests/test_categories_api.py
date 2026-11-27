@@ -1,16 +1,13 @@
-from collections.abc import Callable
 from http import HTTPStatus
 
-from django.http import HttpResponse
 import pytest
 
+from finance_planner.testing import JsonSender
 from ledger.models import Account, Category
 from ledger.tests.factories import make_operation, read_errors, read_messages
 from users.models import User
 
 pytestmark = pytest.mark.django_db
-
-JsonSender = Callable[..., HttpResponse]
 
 CATEGORIES_URL = "/api/categories"
 COMMON_CATEGORY_COUNT = 14

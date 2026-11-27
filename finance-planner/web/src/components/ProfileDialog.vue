@@ -37,9 +37,7 @@ const saveLabel = computed(() => (isSavingVisible.value ? "Сохранение�
 const closeButtonProps = computed(() => buildCloseButtonProps(isSaving.value));
 
 // Поле выбора PrimeVue — это span с ролью combobox: связь с подсказкой и начальный фокус диалога передаются ему через pass-through
-const timeZonePassThrough = computed(() => ({
-    label: { ...describeInput(TIME_ZONE_INPUT_ID, "time_zone", { hasHint: true }), autofocus: true },
-}));
+const timeZonePassThrough = computed(() => ({ label: { ...describeInput(TIME_ZONE_INPUT_ID, "time_zone", { hasHint: true }), autofocus: true } }));
 
 // Сразу при монтировании тоже: диалог подгружается при первом открытии и появляется уже открытым
 watch(

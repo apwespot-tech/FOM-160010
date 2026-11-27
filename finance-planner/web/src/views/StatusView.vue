@@ -6,7 +6,7 @@ import { RouterLink, useRoute } from "vue-router";
 import ServiceCard from "../components/ServiceCard.vue";
 import { useHealthCheck } from "../composables/useHealthCheck";
 import type { ServiceDetail } from "../types/health";
-import { readReturnPath } from "../utils/returnPath";
+import { findOwnPath } from "../utils/returnPath";
 
 const EMPTY_VALUE = "нет данных";
 
@@ -68,14 +68,14 @@ const databaseDetails = computed<ServiceDetail[]>(() => {
     ];
 });
 
+const areServicesOnline = computed(() => apiState.value === "online" && databaseState.value === "online");
+
 const summaryText = computed(() => {
     if (isChecking.value || lastResult.value === null) {
         return "Проверка сервисов…";
     }
 
-    const allServicesOnline = apiState.value === "online" && databaseState.value === "online";
-
-    if (allServicesOnline) {
+    if (areServicesOnline.value) {
         return "Все сервисы работают";
     }
 
@@ -90,15 +90,14 @@ const lastCheckText = computed(() => {
     return `Последняя проверка в ${timeFormatter.format(checkedAt.value)}`;
 });
 
-// Сюда защита маршрутов уводит, когда API не ответил. Исходная страница сохранена в адресе, и к ней можно вернуться
+// Сюда защита маршрутов уводит, когда API не ответил, а исходная страница сохранена в адресе. Ссылка назад видна,
+// только когда сервисы снова работают: иначе переход опять закончился бы на этой странице
 const returnPath = computed(() => {
-    const nextValue = route.query.next;
-
-    if (typeof nextValue !== "string") {
+    if (!areServicesOnline.value) {
         return null;
     }
 
-    return readReturnPath(nextValue);
+    return findOwnPath(route.query.next);
 });
 
 const buttonLabel = computed(() => {

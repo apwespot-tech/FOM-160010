@@ -1,9 +1,12 @@
 import type { ApiErrorBody, FieldErrors, ValidationErrorItem } from "../types/api";
+import { NON_BREAKING_SPACE } from "../utils/money";
 import { readCsrfToken } from "./csrf";
 
 const CSRF_ENDPOINT = "/api/auth/csrf";
 const CSRF_HEADER_NAME = "X-CSRFToken";
-const REQUEST_TIMEOUT_MS = 15000;
+const MILLISECONDS_PER_SECOND = 1000;
+const REQUEST_TIMEOUT_SECONDS = 15;
+const REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND;
 const NO_CONTENT_STATUS = 204;
 const FORBIDDEN_STATUS = 403;
 const UNSAFE_METHODS: ReadonlySet<HttpMethod> = new Set(["POST", "PATCH", "DELETE"]);
@@ -11,7 +14,7 @@ const UNSAFE_METHODS: ReadonlySet<HttpMethod> = new Set(["POST", "PATCH", "DELET
 const PLANNER_ERROR_TYPES: ReadonlySet<string> = new Set(["planner_format", "planner_rule"]);
 
 const NETWORK_FAILURE_TEXT = "Нет связи с сервером. Проверьте подключение и повторите попытку";
-const TIMEOUT_TEXT = "Сервер не ответил за 15 секунд. Повторите попытку позже";
+const TIMEOUT_TEXT = `Сервер не ответил за ${REQUEST_TIMEOUT_SECONDS}${NON_BREAKING_SPACE}секунд. Повторите попытку позже`;
 const TIMEOUT_ERROR_NAME = "TimeoutError";
 const UNEXPECTED_RESPONSE_TEXT = "Сервер ответил неожиданно. Повторите попытку позже";
 const FORM_ERRORS_TEXT = "Проверьте поля формы";

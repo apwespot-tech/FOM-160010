@@ -1,10 +1,10 @@
-from collections.abc import Callable
 import json
 
 from django.http import HttpResponse
 from django.test import Client
 import pytest
 
+from finance_planner.testing import JsonSender
 from users.models import User
 
 CSRF_URL = "/api/auth/csrf"
@@ -37,7 +37,7 @@ def csrf_headers(csrf_token: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def send_json(csrf_client: Client) -> Callable[..., HttpResponse]:
+def send_json(csrf_client: Client) -> JsonSender:
     def send(method: str, path: str, body: object | None = None, *, should_send_token: bool = True) -> HttpResponse:
         headers = {}
 

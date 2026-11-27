@@ -13,10 +13,11 @@ import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useFieldErrors } from "../composables/useFieldErrors";
 import { useNotifier } from "../composables/useNotifier";
 import { ApiError, describeError } from "../services/apiClient";
-import type { Account, AccountKind, AccountUpdateInput } from "../types/ledger";
+import type { Account, AccountKind } from "../types/ledger";
 import { buildCloseButtonProps } from "../utils/dialogs";
 import { checkRequired } from "../utils/formChecks";
 import { buildLabelId } from "../utils/formIds";
+import { collectAccountChanges } from "../utils/ledgerChanges";
 import { ACCOUNT_KIND_LABELS, ACCOUNT_KIND_OPTIONS } from "../utils/ledgerLabels";
 import { MINUS_SIGN, NON_BREAKING_SPACE, normalizeAmountInput } from "../utils/money";
 
@@ -138,26 +139,6 @@ function showSaveError(error: unknown): void {
     formError.value = describeError(error);
 }
 
-// В PATCH уходят только изменённые поля, чтобы правка не затёрла то, что за это время поменяли в другой вкладке
-function collectAccountChanges(account: Account, initialBalance: string): AccountUpdateInput {
-    const changes: AccountUpdateInput = {};
-    const name = form.name.trim();
-
-    if (name !== account.name) {
-        changes.name = name;
-    }
-
-    if (initialBalance !== account.initialBalance) {
-        changes.initialBalance = initialBalance;
-    }
-
-    if (form.isArchived !== account.isArchived) {
-        changes.isArchived = form.isArchived;
-    }
-
-    return changes;
-}
-
 async function saveAccount(initialBalance: string): Promise<void> {
     const account = props.account;
 
@@ -168,7 +149,7 @@ async function saveAccount(initialBalance: string): Promise<void> {
         return;
     }
 
-    const changes = collectAccountChanges(account, initialBalance);
+    const changes = collectAccountChanges(account, { name: form.name.trim(), initialBalance, isArchived: form.isArchived });
     const hasChanges = Object.keys(changes).length > 0;
 
     // Без изменений запрос не нужен, диалог просто закрывается
@@ -205,14 +186,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-    <Dialog
-        v-model:visible="isVisible"
-        :header="header"
-        modal
-        :draggable="false"
-        :close-on-escape="!isSaving"
-        :close-button-props="closeButtonProps"
-    >
+    <Dialog v-model:visible="isVisible" :header="header" modal :draggable="false" :close-on-escape="!isSaving" :close-button-props="closeButtonProps">
         <form class="dialog-form" novalidate @submit.prevent="save">
             <!-- Диалог ставит фокус на первый элемент с autofocus, без него фокус попал бы на крестик закрытия -->
             <FormField label="Название" :input-id="NAME_INPUT_ID" :error="fieldErrors.name" is-required>

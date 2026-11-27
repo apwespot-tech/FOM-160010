@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
 import pytest
@@ -59,20 +60,23 @@ def create_expense(account: Account, category: Category, amount: str = "120.50")
 
 
 def create_transfer_operation(account: Account, transfer: Transfer, kind: str) -> Operation:
-    return Operation.objects.create(
-        user=account.user,
-        account=account,
-        kind=kind,
-        amount=transfer.amount_out,
-        date=OPERATION_DATE,
-        transfer=transfer,
-    )
+    return Operation.objects.create(user=account.user, account=account, kind=kind, amount=transfer.amount_out, date=OPERATION_DATE, transfer=transfer)
 
 
 def test_migration_creates_common_categories() -> None:
     common_categories = set(Category.objects.filter(user__isnull=True).values_list("kind", "name"))
 
     assert common_categories == COMMON_CATEGORIES
+
+
+def test_common_categories_migration_applies_again_after_rollback() -> None:
+    # Откат к 0001 оставляет общие категории в базе, и повторное применение не должно падать на уникальности названий
+    call_command("migrate", "ledger", "0001", verbosity=0)
+    call_command("migrate", "ledger", "0002", verbosity=0)
+    common_categories = list(Category.objects.filter(user__isnull=True).values_list("kind", "name"))
+
+    assert len(common_categories) == len(COMMON_CATEGORIES)
+    assert set(common_categories) == COMMON_CATEGORIES
 
 
 def test_valid_rows_are_saved(card_account: Account, groceries: Category, transfer: Transfer) -> None:

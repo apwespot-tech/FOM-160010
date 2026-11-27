@@ -1,19 +1,19 @@
-from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
 from http import HTTPStatus
 
+from django.db import connection
 from django.http import HttpResponse
 from django.test import Client
 import pytest
 
+from finance_planner.testing import JsonSender
+from ledger import services
 from ledger.models import Account, Category, Operation
 from ledger.tests.factories import make_account, make_operation, make_transfer, read_errors, read_messages
 from users.models import User
 
 pytestmark = pytest.mark.django_db
-
-JsonSender = Callable[..., HttpResponse]
 
 OPERATIONS_URL = "/api/operations"
 USER_TODAY = date(2026, 11, 21)
@@ -486,6 +486,7 @@ def test_update_operation_rejects_foreign_and_missing_references(
     operation.refresh_from_db()
 
     assert foreign_response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert missing_response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert read_messages(foreign_response) == {"account_id": "Счёт не найден", "category_id": "Категория не найдена"}
     assert read_messages(missing_response) == {"account_id": "Счёт не найден", "category_id": "Категория не найдена"}
     assert operation.account_id == card_account.id
@@ -545,3 +546,58 @@ def test_list_operations_page_far_beyond_end_is_empty(send_json: JsonSender, car
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {"items": [], "count": 1}
+
+
+@pytest.fixture
+def immediate_constraints(db: None) -> None:
+    # Тест идёт в транзакции, которая не фиксируется, поэтому внешние ключи здесь проверяются сразу при записи, а не при фиксации
+    with connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
+def delete_category_after_checks(monkeypatch: pytest.MonkeyPatch, category: Category) -> None:
+    # Категорию удаляют в другой вкладке ровно между проверкой ссылок и записью операции
+    check_errors = services.raise_if_errors
+
+    def check_then_delete(field_errors: services.FieldErrors) -> None:
+        check_errors(field_errors)
+        Category.objects.filter(id=category.id).delete()
+
+    monkeypatch.setattr(services, "raise_if_errors", check_then_delete)
+
+
+@pytest.mark.usefixtures("immediate_constraints")
+def test_create_operation_reports_category_deleted_meanwhile(
+    send_json: JsonSender,
+    monkeypatch: pytest.MonkeyPatch,
+    signed_in_user: User,
+    card_account: Account,
+) -> None:
+    hobby = Category.objects.create(user=signed_in_user, name="Хобби", kind="expense")
+    delete_category_after_checks(monkeypatch, hobby)
+    response = send_json("POST", OPERATIONS_URL, build_operation_body(card_account, hobby))
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert read_messages(response) == {"category_id": "Категория не найдена"}
+    assert not Operation.objects.exists()
+
+
+@pytest.mark.usefixtures("immediate_constraints")
+def test_update_operation_on_archived_account_reports_only_the_deleted_category(
+    send_json: JsonSender,
+    monkeypatch: pytest.MonkeyPatch,
+    signed_in_user: User,
+    card_account: Account,
+    groceries: Category,
+) -> None:
+    operation = make_operation(card_account, groceries)
+    card_account.is_archived = True
+    card_account.save(update_fields=["is_archived"])
+    books = Category.objects.create(user=signed_in_user, name="Книги", kind="expense")
+    delete_category_after_checks(monkeypatch, books)
+    response = send_json("PATCH", build_operation_url(operation), {"category_id": books.id})
+    operation.refresh_from_db()
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert read_messages(response) == {"category_id": "Категория не найдена"}
+    assert operation.category_id == groceries.id

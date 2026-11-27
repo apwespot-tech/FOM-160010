@@ -221,14 +221,8 @@ def create_operation(user: User, kind: str, account_id: int, category_id: int, a
         raise
 
 
-def update_operation(user: User, operation: Operation, changes: dict[str, object]) -> Operation:
-    if operation.transfer_id is not None:
-        raise TransferOperationError
-
+def check_reference_changes(user: User, operation: Operation, new_account_id: int, new_category_id: int | None) -> FieldErrors:
     field_errors = []
-    new_account_id = changes.get("account_id", operation.account_id)
-    new_category_id = changes.get("category_id", operation.category_id)
-    new_date = changes.get("date", operation.date)
 
     # Уже выбранный архивный счёт остаётся допустимым: проверяется только новый счёт
     if new_account_id != operation.account_id:
@@ -237,6 +231,18 @@ def update_operation(user: User, operation: Operation, changes: dict[str, object
     if new_category_id != operation.category_id:
         new_category = find_visible_category(user, new_category_id)
         field_errors.extend(check_selected_category(new_category, operation.kind))
+
+    return field_errors
+
+
+def update_operation(user: User, operation: Operation, changes: dict[str, object]) -> Operation:
+    if operation.transfer_id is not None:
+        raise TransferOperationError
+
+    new_account_id = changes.get("account_id", operation.account_id)
+    new_category_id = changes.get("category_id", operation.category_id)
+    new_date = changes.get("date", operation.date)
+    field_errors = check_reference_changes(user, operation, new_account_id, new_category_id)
 
     if new_date != operation.date:
         field_errors.extend(check_operation_date(user, new_date))
@@ -253,7 +259,9 @@ def update_operation(user: User, operation: Operation, changes: dict[str, object
         with transaction.atomic():
             operation.save(update_fields=list(changes))
     except IntegrityError as error:
-        reference_errors = recheck_references(user, new_account_id, new_category_id, operation.kind)
+        # Запись откатилась: операция перечитывается из базы, и проверяются те же изменённые ссылки, что и до записи
+        operation.refresh_from_db()
+        reference_errors = check_reference_changes(user, operation, new_account_id, new_category_id)
 
         if reference_errors:
             raise LedgerRuleError(reference_errors) from error

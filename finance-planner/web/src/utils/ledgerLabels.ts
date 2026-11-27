@@ -25,24 +25,18 @@ export const OPERATION_KIND_LABELS: Record<OperationKind, string> = {
     transfer_in: "Перевод: зачисление",
 };
 
-// Списки собраны из тех же словарей подписей, но с явным типом значения: v-model получает вид, а не любую строку
-export const ACCOUNT_KIND_OPTIONS: ChoiceOption<AccountKind>[] = [
-    { value: "cash", label: ACCOUNT_KIND_LABELS.cash },
-    { value: "card", label: ACCOUNT_KIND_LABELS.card },
-    { value: "savings", label: ACCOUNT_KIND_LABELS.savings },
-];
+// Варианты выбора строятся из словаря подписей: тип Record требует подпись у каждого вида, поэтому ни один вид не потеряется,
+// а v-model получает вид, а не любую строку
+function listChoices<T extends string>(labels: Record<T, string>): ChoiceOption<T>[] {
+    // Object.keys возвращает просто строки, а ключи словаря подписей и есть виды
+    const values = Object.keys(labels) as T[];
 
-export const CATEGORY_KIND_OPTIONS: ChoiceOption<CategoryKind>[] = [
-    { value: "expense", label: CATEGORY_KIND_LABELS.expense },
-    { value: "income", label: CATEGORY_KIND_LABELS.income },
-];
+    return values.map((value) => ({ value, label: labels[value] }));
+}
 
-export const OPERATION_KIND_OPTIONS: ChoiceOption<OperationKind>[] = [
-    { value: "expense", label: OPERATION_KIND_LABELS.expense },
-    { value: "income", label: OPERATION_KIND_LABELS.income },
-    { value: "transfer_out", label: OPERATION_KIND_LABELS.transfer_out },
-    { value: "transfer_in", label: OPERATION_KIND_LABELS.transfer_in },
-];
+export const ACCOUNT_KIND_OPTIONS = listChoices(ACCOUNT_KIND_LABELS);
+export const CATEGORY_KIND_OPTIONS = listChoices(CATEGORY_KIND_LABELS);
+export const OPERATION_KIND_OPTIONS = listChoices(OPERATION_KIND_LABELS);
 
 const DECREASING_KINDS: ReadonlySet<OperationKind> = new Set(["expense", "transfer_out"]);
 const COLUMN_FORMAT: MoneyFormatOptions = { groupingDigits: COLUMN_GROUPING_DIGITS };

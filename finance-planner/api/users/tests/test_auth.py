@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from http import HTTPStatus
 from unittest import mock
 
@@ -8,11 +7,10 @@ from django.test import Client
 import pytest
 from pytest_django import Settings
 
+from finance_planner.testing import JsonSender
 from users.models import User
 
 pytestmark = pytest.mark.django_db
-
-JsonSender = Callable[..., HttpResponse]
 
 CSRF_URL = "/api/auth/csrf"
 REGISTER_URL = "/api/auth/register"

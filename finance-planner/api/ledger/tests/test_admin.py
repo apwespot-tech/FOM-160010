@@ -11,7 +11,8 @@ from users.models import User
 
 pytestmark = pytest.mark.django_db
 
-MODEL_PATHS = ["account", "category", "operation", "transfer"]
+LEDGER_MODELS = {"account": Account, "category": Category, "operation": Operation, "transfer": Transfer}
+MODEL_PATHS = list(LEDGER_MODELS)
 
 
 @pytest.fixture
@@ -65,8 +66,7 @@ def test_admin_cannot_change_or_delete_ledger_rows(admin_client: Client, ledger_
 
     assert change_response.status_code == HTTPStatus.FORBIDDEN
     assert delete_response.status_code == HTTPStatus.FORBIDDEN
-    assert Operation.objects.exists()
-    assert Transfer.objects.exists()
+    assert LEDGER_MODELS[model_path].objects.filter(pk=ledger_rows[model_path]).exists()
 
 
 def test_admin_deletes_user_with_ledger_rows(admin_client: Client, user: User, ledger_rows: dict[str, int]) -> None:

@@ -24,7 +24,9 @@ COMMON_CATEGORIES = [
 def create_common_categories(apps: StateApps, schema_editor: BaseDatabaseSchemaEditor) -> None:
     Category = apps.get_model("ledger", "Category")
     categories = [Category(user=None, kind=kind, name=name) for kind, name in COMMON_CATEGORIES]
-    Category.objects.bulk_create(categories)
+
+    # После отката к 0001 категории остаются в базе, поэтому при повторном применении уже существующие пропускаются
+    Category.objects.bulk_create(categories, ignore_conflicts=True)
 
 
 class Migration(migrations.Migration):
@@ -33,6 +35,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Обратный шаг ничего не удаляет: на общие категории могут ссылаться операции, а таблицу всё равно удалит откат 0001
+        # Обратный шаг ничего не удаляет: на общие категории могут ссылаться операции пользователей
         migrations.RunPython(create_common_categories, migrations.RunPython.noop),
     ]

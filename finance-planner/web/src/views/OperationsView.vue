@@ -32,6 +32,8 @@ const CANCEL_BUTTON = { label: "Отмена", severity: "secondary", outlined: 
 const STALE_DATA_TEXT = "Список не обновился, на экране прежние данные";
 // В тексте подтверждения сумма пишется как в предложении: четырёхзначные числа слитно, в отличие от столбца таблицы
 const SENTENCE_MONEY_FORMAT: MoneyFormatOptions = { groupingDigits: DEFAULT_GROUPING_DIGITS };
+// Справку о счетах в архиве диктор читает при каждом открытии страницы, поэтому она не прерывает его, а ждёт паузы
+const POLITE_NOTICE_PASS_THROUGH = { root: { role: "status", "aria-live": "polite" } };
 
 function createEmptyFilters(): OperationFilterValues {
     return {
@@ -202,7 +204,7 @@ function confirmRemoval(operation: Operation): void {
         </div>
 
         <template v-else>
-            <Message v-if="!hasActiveAccounts" severity="info" :closable="false">
+            <Message v-if="!hasActiveAccounts" severity="info" :closable="false" :pt="POLITE_NOTICE_PASS_THROUGH">
                 <div class="inline-notice">
                     <span>Все счета в архиве. Чтобы записать операцию, верните счёт из архива</span>
                     <RouterLink :to="ACCOUNTS_ROUTE">Перейти к счетам</RouterLink>

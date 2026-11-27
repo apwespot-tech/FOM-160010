@@ -29,6 +29,7 @@ OPERATIONS_MAX_PAGE_SIZE = 100
 # При равной дате порядок задаёт id в том же направлении, иначе строки одного дня менялись бы местами между страницами
 OPERATION_ORDERINGS = {"-date": ("-date", "-id"), "date": ("date", "id")}
 
+
 class OperationPagination(PageNumberPagination):
     # Страница за концом списка отдаёт пустой список без запроса строк: огромный номер страницы
     # иначе превратился бы в OFFSET больше bigint, и PostgreSQL ответил бы ошибкой

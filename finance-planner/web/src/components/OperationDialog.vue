@@ -16,10 +16,11 @@ import { useFieldErrors } from "../composables/useFieldErrors";
 import { useNotifier } from "../composables/useNotifier";
 import { useOperationMutations } from "../composables/useOperations";
 import { ApiError, describeError } from "../services/apiClient";
-import type { Account, Category, CategoryKind, Operation, OperationChanges } from "../types/ledger";
+import type { Account, Category, CategoryKind, Operation, OperationValues } from "../types/ledger";
 import { isoDateToLocalDate, localDateToIsoDate, readTodayInTimeZone } from "../utils/dates";
 import { buildCloseButtonProps } from "../utils/dialogs";
 import { buildLabelId } from "../utils/formIds";
+import { collectOperationChanges } from "../utils/ledgerChanges";
 import { CATEGORY_KIND_LABELS, CATEGORY_KIND_OPTIONS, isCategoryKind } from "../utils/ledgerLabels";
 import { isZeroAmount, normalizeAmountInput } from "../utils/money";
 
@@ -29,14 +30,6 @@ interface OperationForm {
     categoryId: number | null;
     amount: string;
     date: Date | null;
-    note: string;
-}
-
-interface OperationValues {
-    accountId: number;
-    categoryId: number;
-    amount: string;
-    date: string;
     note: string;
 }
 
@@ -65,9 +58,7 @@ function markPressedKindButton(options: ToggleButtonPassThroughMethodOptions): {
     return { autofocus: options.props.modelValue === true };
 }
 
-const KIND_PASS_THROUGH: SelectButtonPassThroughOptions = {
-    pcToggleButton: { root: markPressedKindButton },
-};
+const KIND_PASS_THROUGH: SelectButtonPassThroughOptions = { pcToggleButton: { root: markPressedKindButton } };
 
 const props = defineProps<{
     operation: Operation | null;
@@ -269,33 +260,6 @@ function showSaveError(error: unknown): void {
     formError.value = describeError(error);
 }
 
-// В PATCH уходят только изменённые поля, чтобы правка не затёрла то, что за это время поменяли в другой вкладке
-function collectOperationChanges(operation: Operation, values: OperationValues): OperationChanges {
-    const changes: OperationChanges = {};
-
-    if (values.accountId !== operation.accountId) {
-        changes.accountId = values.accountId;
-    }
-
-    if (values.categoryId !== operation.categoryId) {
-        changes.categoryId = values.categoryId;
-    }
-
-    if (values.amount !== operation.amount) {
-        changes.amount = values.amount;
-    }
-
-    if (values.date !== operation.date) {
-        changes.date = values.date;
-    }
-
-    if (values.note !== operation.note) {
-        changes.note = values.note;
-    }
-
-    return changes;
-}
-
 async function saveOperation(values: OperationValues): Promise<void> {
     const operation = props.operation;
 
@@ -342,14 +306,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-    <Dialog
-        v-model:visible="isVisible"
-        :header="header"
-        modal
-        :draggable="false"
-        :close-on-escape="!isSaving"
-        :close-button-props="closeButtonProps"
-    >
+    <Dialog v-model:visible="isVisible" :header="header" modal :draggable="false" :close-on-escape="!isSaving" :close-button-props="closeButtonProps">
         <form class="dialog-form" novalidate @submit.prevent="save">
             <div v-if="!isEditing" class="form-field-group" role="group" :aria-labelledby="KIND_LABEL_ID">
                 <span :id="KIND_LABEL_ID" class="operation-dialog__label">Вид</span>

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, buildUrl, collectFieldErrors, requestJson, setUnauthenticatedHandler } from "./apiClient";
 import { CSRF_COOKIE_NAME } from "./csrf";
+import { NON_BREAKING_SPACE } from "../utils/money";
 
 function createJsonResponse(status: number, body: unknown): Response {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -176,7 +177,9 @@ describe("requestJson", () => {
         const timeoutError = new DOMException("The operation timed out", "TimeoutError");
         vi.stubGlobal("fetch", vi.fn().mockRejectedValue(timeoutError));
 
-        await expect(requestJson("/api/accounts")).rejects.toMatchObject({ status: null, code: "timeout" });
+        const expectedMessage = `Сервер не ответил за 15${NON_BREAKING_SPACE}секунд. Повторите попытку позже`;
+
+        await expect(requestJson("/api/accounts")).rejects.toMatchObject({ status: null, code: "timeout", message: expectedMessage });
     });
 
     it("treats a lost connection as a network failure", async () => {

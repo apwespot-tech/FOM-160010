@@ -9,10 +9,8 @@ import { RouterView, useRoute, useRouter } from "vue-router";
 import AppHeader from "./components/AppHeader.vue";
 import { useDelayedFlag } from "./composables/useDelayedFlag";
 
-// На узком экране уведомление занимает ширину окна: фиксированные 25rem PrimeVue уходили бы за левый край
-const TOAST_BREAKPOINTS = {
-    "640px": { width: "calc(100vw - 2rem)", right: "1rem", left: "1rem" },
-};
+// До 40rem, как и вся вёрстка, уведомление занимает ширину окна: фиксированные 25rem PrimeVue уходили бы за левый край
+const TOAST_BREAKPOINTS = { "40rem": { width: "calc(100vw - 2rem)", right: "1rem", left: "1rem" } };
 
 const route = useRoute();
 const router = useRouter();

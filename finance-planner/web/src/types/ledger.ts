@@ -44,6 +44,8 @@ export interface AccountUpdateInput {
     isArchived?: boolean;
 }
 
+export type AccountValues = Required<AccountUpdateInput>;
+
 export type CategoryKind = "income" | "expense";
 export type OperationKind = "income" | "expense" | "transfer_out" | "transfer_in";
 export type OperationSort = "-date" | "date";
@@ -119,4 +121,5 @@ export interface OperationInput {
     note: string;
 }
 
-export type OperationChanges = Partial<Omit<OperationInput, "kind">>;
+export type OperationValues = Omit<OperationInput, "kind">;
+export type OperationChanges = Partial<OperationValues>;

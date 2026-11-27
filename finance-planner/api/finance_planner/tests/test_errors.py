@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from http import HTTPStatus
 import json
 import logging
@@ -6,7 +5,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core.exceptions import BadRequest, RequestDataTooBig
-from django.http import Http404, HttpResponse, RawPostDataException, UnreadablePostError
+from django.http import Http404, RawPostDataException, UnreadablePostError
 from django.http.multipartparser import MultiPartParserError
 from django.test import Client, RequestFactory
 from ninja.errors import AuthenticationError, HttpError, Throttled
@@ -14,8 +13,7 @@ import pytest
 
 from finance_planner import errors
 from finance_planner.api import api
-
-JsonSender = Callable[..., HttpResponse]
+from finance_planner.testing import JsonSender
 
 SAMPLE_URL = "/api/sample"
 LOGIN_URL = "/api/auth/login"

@@ -1,17 +1,14 @@
-from collections.abc import Callable
 from decimal import Decimal
 from http import HTTPStatus
 
-from django.http import HttpResponse
 import pytest
 
+from finance_planner.testing import JsonSender
 from ledger.models import Account, Category
 from ledger.tests.factories import make_account, make_operation, make_transfer, read_errors, read_messages
 from users.models import User
 
 pytestmark = pytest.mark.django_db
-
-JsonSender = Callable[..., HttpResponse]
 
 ACCOUNTS_URL = "/api/accounts"
 
@@ -242,9 +239,9 @@ def test_account_id_must_be_integer(send_json: JsonSender) -> None:
 
 
 def test_list_accounts_is_sorted_by_id(send_json: JsonSender, signed_in_user: User) -> None:
-    second_account = make_account(signed_in_user, name="Яблоко")
-    first_account = make_account(signed_in_user, name="Абрикос")
+    older_account = make_account(signed_in_user, name="Яблоко")
+    newer_account = make_account(signed_in_user, name="Абрикос")
     response = send_json("GET", ACCOUNTS_URL)
     account_ids = [item["id"] for item in response.json()["items"]]
 
-    assert account_ids == [second_account.id, first_account.id]
+    assert account_ids == [older_account.id, newer_account.id]

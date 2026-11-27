@@ -74,7 +74,7 @@ export function normalizeAmountInput(text: string, isNegativeAllowed: boolean = 
         return null;
     }
 
-    // Ведущие нули убираются, чтобы «00» распознавался как ноль ещё в браузере, а «−0» не давал отрицательного нуля
+    // Ведущие нули убираются, чтобы «00» распознавался как ноль ещё в браузере, а минус перед нулём не давал отрицательного нуля
     const [integerPart, fractionPart = ""] = compactText.replace("-", "").split(".");
     const integerDigits = integerPart.replace(LEADING_ZEROS_PATTERN, "");
     const cents = fractionPart.padEnd(CENT_DIGITS, "0");

@@ -1,14 +1,40 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReturnQuery, readReturnPath } from "./returnPath";
+import { buildReturnQuery, findOwnPath, readReturnPath } from "./returnPath";
 
-describe("readReturnPath", () => {
-    it("returns a path of the planner with its query", () => {
-        expect(readReturnPath("/operations?page=2")).toBe("/operations?page=2");
+// Браузер читает обратную косую черту как прямую и выбрасывает из адреса табуляцию и переводы строки
+const FOREIGN_PATHS = [
+    "//example.com",
+    "/\\example.com",
+    "/\t/example.com",
+    "/\n/example.com",
+    "https://example.com",
+    "operations",
+    "",
+];
+
+describe("findOwnPath", () => {
+    it("returns a path of the planner with its query and fragment", () => {
+        expect(findOwnPath("/operations?page=2#top")).toBe("/operations?page=2#top");
     });
 
-    it.each(["//example.com", "https://example.com", "operations", "", undefined, null, ["/accounts"]])("sends %s to the home page", (nextValue) => {
-        expect(readReturnPath(nextValue)).toBe("/");
+    it.each(FOREIGN_PATHS)("rejects %j", (nextValue) => {
+        expect(findOwnPath(nextValue)).toBeNull();
+    });
+
+    it.each([undefined, null, ["/accounts"]])("rejects a value that is not a string: %j", (nextValue) => {
+        expect(findOwnPath(nextValue)).toBeNull();
+    });
+});
+
+describe("readReturnPath", () => {
+    it("returns an own path", () => {
+        expect(readReturnPath("/accounts")).toBe("/accounts");
+    });
+
+    it("sends a foreign or missing path to the home page", () => {
+        expect(readReturnPath("/\\example.com")).toBe("/");
+        expect(readReturnPath(undefined)).toBe("/");
     });
 });
 

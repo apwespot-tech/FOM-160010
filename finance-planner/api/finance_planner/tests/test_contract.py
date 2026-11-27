@@ -1,18 +1,15 @@
-from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
 import os
 from pathlib import Path
 import re
 
-from django.http import HttpResponse
 from django.test import Client
 import pytest
 
 from finance_planner.api import api
+from finance_planner.testing import JsonSender
 from users.models import User
-
-JsonSender = Callable[..., HttpResponse]
 
 CONTRACT_PATH_VARIABLE = "API_CONTRACT_PATH"
 # Тест лежит в api/finance_planner/tests, а docs рядом с папкой api. В контейнере docs подключена как /docs, и путь тот же

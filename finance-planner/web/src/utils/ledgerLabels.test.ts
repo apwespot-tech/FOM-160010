@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatOperationAmount, isCategoryKind } from "./ledgerLabels";
+import { ACCOUNT_KIND_OPTIONS, formatOperationAmount, isCategoryKind, OPERATION_KIND_OPTIONS } from "./ledgerLabels";
 import { DEFAULT_GROUPING_DIGITS, MINUS_SIGN, NON_BREAKING_SPACE } from "./money";
 
 describe("formatOperationAmount", () => {
@@ -18,6 +18,18 @@ describe("formatOperationAmount", () => {
         const sentenceFormat = { groupingDigits: DEFAULT_GROUPING_DIGITS };
 
         expect(formatOperationAmount("expense", "1250.50", "RUB", sentenceFormat)).toBe(`${MINUS_SIGN}1250.50${NON_BREAKING_SPACE}₽`);
+    });
+});
+
+describe("kind options", () => {
+    it("list every kind with its label in the dictionary order", () => {
+        expect(ACCOUNT_KIND_OPTIONS).toEqual([
+            { value: "cash", label: "Наличные" },
+            { value: "card", label: "Карта" },
+            { value: "savings", label: "Накопительный" },
+        ]);
+
+        expect(OPERATION_KIND_OPTIONS.map((option) => option.value)).toEqual(["expense", "income", "transfer_out", "transfer_in"]);
     });
 });
 
