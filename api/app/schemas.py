@@ -33,6 +33,7 @@ class TokenOut(BaseModel):
 
 
 class EventCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=2000)
     event_date: datetime
@@ -56,6 +57,7 @@ class EventDetail(EventOut):
 
 
 class MovieCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=200)
     genre: str = Field(min_length=1, max_length=50)
     poster_url: str | None = Field(default=None, max_length=500)
@@ -102,3 +104,12 @@ class ResultsOut(BaseModel):
     winner: MovieResult | None
     tie: bool
     movies: list[MovieResult]
+
+
+class EventUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    event_date: datetime | None = None
+

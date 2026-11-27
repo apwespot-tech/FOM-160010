@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import Event, EventParticipant, User
-from app.schemas import EventCreate, EventDetail, EventOut, UserOut
+from app.schemas import EventCreate, EventDetail, EventOut, EventUpdate, UserOut
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -121,3 +121,46 @@ def join_event(
         db.commit()
 
     return _to_out(event, _participants_count(db, event.id))
+
+@router.patch("/{event_id}", response_model=EventOut)
+def update_event(
+    event_id: int,
+    data: EventUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вечер не найден")
+    if event.owner_id != current_user.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Изменять вечер может только организатор"
+        )
+
+    if data.title is not None:
+        event.title = data.title
+    if data.description is not None:
+        event.description = data.description
+    if data.event_date is not None:
+        event.event_date = _to_naive_utc(data.event_date)
+
+    db.commit()
+    db.refresh(event)
+    return _to_out(event, _participants_count(db, event.id))
+
+
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вечер не найден")
+    if event.owner_id != current_user.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Удалить вечер может только организатор"
+        )
+    db.delete(event)
+    db.commit()
