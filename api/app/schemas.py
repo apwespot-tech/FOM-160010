@@ -52,3 +52,28 @@ class EventOut(BaseModel):
 
 class EventDetail(EventOut):
     participants: list[UserOut] = []
+
+
+
+class MovieCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    genre: str = Field(min_length=1, max_length=50)
+    poster_url: str | None = Field(default=None, max_length=500)
+
+    @field_validator("poster_url")
+    @classmethod
+    def poster_is_http(cls, value: str | None) -> str | None:
+        if value and not value.startswith(("http://", "https://")):
+            raise ValueError("Ссылка должна начинаться с http:// или https://")
+        return value or None
+
+
+class MovieOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    event_id: int
+    title: str
+    genre: str
+    poster_url: str | None
+    added_by: int
