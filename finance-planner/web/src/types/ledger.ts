@@ -43,3 +43,80 @@ export interface AccountUpdateInput {
     initialBalance?: string;
     isArchived?: boolean;
 }
+
+export type CategoryKind = "income" | "expense";
+export type OperationKind = "income" | "expense" | "transfer_out" | "transfer_in";
+export type OperationSort = "-date" | "date";
+
+export interface CategoryBody {
+    id: number;
+    name: string;
+    kind: CategoryKind;
+    is_common: boolean;
+}
+
+export interface Category {
+    id: number;
+    name: string;
+    kind: CategoryKind;
+    isCommon: boolean;
+}
+
+export interface OperationBody {
+    id: number;
+    kind: OperationKind;
+    account_id: number;
+    category_id: number | null;
+    amount: string;
+    date: string;
+    note: string;
+    transfer_id: number | null;
+    created_at: string;
+}
+
+export interface OperationPageBody {
+    items: OperationBody[];
+    count: number;
+}
+
+export interface Operation {
+    id: number;
+    kind: OperationKind;
+    accountId: number;
+    categoryId: number | null;
+    amount: string;
+    date: string;
+    note: string;
+    transferId: number | null;
+    createdAt: string;
+}
+
+export interface OperationPage {
+    items: Operation[];
+    count: number;
+}
+
+export interface OperationFilters {
+    dateFrom: string | null;
+    dateTo: string | null;
+    accountId: number | null;
+    categoryId: number | null;
+    kind: OperationKind | null;
+}
+
+export interface OperationListParameters extends OperationFilters {
+    page: number;
+    pageSize: number;
+    sort: OperationSort;
+}
+
+export interface OperationInput {
+    kind: CategoryKind;
+    accountId: number;
+    categoryId: number;
+    amount: string;
+    date: string;
+    note: string;
+}
+
+export type OperationChanges = Partial<Omit<OperationInput, "kind">>;
