@@ -1,3 +1,6 @@
+import '@fontsource-variable/montserrat'
+import './assets/theme.css'
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
