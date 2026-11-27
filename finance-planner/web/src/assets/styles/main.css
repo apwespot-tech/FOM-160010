@@ -31,6 +31,7 @@
     --color-surface: #1b1f26;
     --color-surface-raised: #232831;
     --color-border: #2b313b;
+    --color-border-strong: #687384;
     --color-text: #dce1e8;
     --color-text-secondary: #a7b0bd;
     --color-text-tertiary: #8f99a7;
@@ -84,4 +85,59 @@ p,
 dl,
 dd {
     margin: 0;
+}
+
+a {
+    color: var(--color-accent);
+    text-underline-offset: 0.2em;
+}
+
+a:hover {
+    color: var(--color-accent-hover);
+}
+
+a:focus-visible {
+    outline: none;
+    border-radius: 0.25rem;
+    box-shadow: var(--focus-ring);
+}
+
+.page-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    margin-bottom: 1.75rem;
+}
+
+.page-heading__caption {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.page-heading__title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.auth-note {
+    color: var(--color-text-secondary);
+}
+
+.auth-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.9375rem;
+}
+
+@media (max-width: 40rem) {
+    .page-heading__title {
+        font-size: 1.5rem;
+    }
 }
