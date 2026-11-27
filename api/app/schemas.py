@@ -77,3 +77,28 @@ class MovieOut(BaseModel):
     genre: str
     poster_url: str | None
     added_by: int
+
+
+class VoteCreate(BaseModel):
+    movie_id: int
+
+
+class VoteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    event_id: int
+    movie_id: int
+    user_id: int
+
+
+class MovieResult(MovieOut):
+    votes: int
+
+
+class ResultsOut(BaseModel):
+    total_votes: int
+    my_vote_movie_id: int | None
+    winner: MovieResult | None
+    tie: bool
+    movies: list[MovieResult]
