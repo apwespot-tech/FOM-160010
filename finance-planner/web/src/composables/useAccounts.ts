@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 
 import { createAccount, deleteAccount, fetchAccounts, updateAccount } from "../services/accountsApi";
+import { ApiError } from "../services/apiClient";
 import { queryKeys } from "../services/queryKeys";
 import type { AccountUpdateInput } from "../types/ledger";
 
@@ -24,6 +25,13 @@ export function useAccountMutations() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
     }
 
+    // Ответ 404 значит, что счёт уже удалили в другой вкладке: список обновляется, как обещает docs/api.md
+    async function refreshAfterMissing(error: Error): Promise<void> {
+        if (error instanceof ApiError && error.code === "not_found") {
+            await refreshAccounts();
+        }
+    }
+
     const createMutation = useMutation({
         mutationFn: createAccount,
         onSuccess: refreshAccounts,
@@ -32,11 +40,13 @@ export function useAccountMutations() {
     const updateMutation = useMutation({
         mutationFn: ({ accountId, changes }: AccountChanges) => updateAccount(accountId, changes),
         onSuccess: refreshAccounts,
+        onError: refreshAfterMissing,
     });
 
     const deleteMutation = useMutation({
         mutationFn: deleteAccount,
         onSuccess: refreshAccounts,
+        onError: refreshAfterMissing,
     });
 
     return {

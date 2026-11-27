@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useQueryClient } from "@tanstack/vue-query";
 import Button from "primevue/button";
-import { computed, defineAsyncComponent, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, useTemplateRef, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useNotifier } from "../composables/useNotifier";
 import { useSessionStore } from "../stores/session";
 
@@ -37,12 +38,24 @@ const isMenuOpen = ref(false);
 const isLoggingOut = ref(false);
 const isProfileOpen = ref(false);
 const hasOpenedProfile = ref(false);
+const menuButton = useTemplateRef<HTMLButtonElement>("menuButton");
 
+const isLoggingOutVisible = useDelayedFlag(isLoggingOut);
 const username = computed(() => session.currentUser?.username ?? "");
 const menuClasses = computed(() => ({ "app-header__menu--open": isMenuOpen.value }));
 
 function toggleMenu(): void {
     isMenuOpen.value = !isMenuOpen.value;
+}
+
+// Меню узкого экрана закрывается клавишей Esc, как всплывающие окна, а фокус возвращается на кнопку «Меню»
+function closeMenuByKeyboard(): void {
+    if (!isMenuOpen.value) {
+        return;
+    }
+
+    isMenuOpen.value = false;
+    menuButton.value?.focus();
 }
 
 function buildLinkTarget(link: NavigationLink): { name: string } {
@@ -55,6 +68,10 @@ function openProfile(): void {
 }
 
 async function logOut(): Promise<void> {
+    if (isLoggingOut.value) {
+        return;
+    }
+
     isLoggingOut.value = true;
 
     try {
@@ -78,7 +95,7 @@ watch(
 
 <template>
     <header class="app-header">
-        <div class="app-header__bar">
+        <div class="app-header__bar" @keydown.esc="closeMenuByKeyboard">
             <RouterLink class="brand" :to="HOME_ROUTE">
                 <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
                     <rect width="32" height="32" rx="8" />
@@ -90,6 +107,7 @@ watch(
 
             <template v-if="session.isAuthenticated">
                 <button
+                    ref="menuButton"
                     class="app-header__menu-button"
                     type="button"
                     aria-controls="main-navigation"
@@ -116,7 +134,15 @@ watch(
                         <span class="app-header__username" :title="username">{{ username }}</span>
                         <div class="app-header__user-actions">
                             <Button label="Профиль" severity="secondary" size="small" text @click="openProfile" />
-                            <Button label="Выйти" severity="secondary" size="small" outlined :loading="isLoggingOut" @click="logOut" />
+                            <Button
+                                label="Выйти"
+                                severity="secondary"
+                                size="small"
+                                outlined
+                                :loading="isLoggingOutVisible"
+                                :disabled="isLoggingOut"
+                                @click="logOut"
+                            />
                         </div>
                     </div>
                 </div>
@@ -317,13 +343,6 @@ watch(
         margin-left: 0;
         padding-top: 0.75rem;
         border-top: 1px solid var(--color-border);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .app-nav__link,
-    .app-header__login-link {
-        transition: none;
     }
 }
 </style>

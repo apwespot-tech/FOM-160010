@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     checkNewPassword,
@@ -55,10 +55,20 @@ describe("checkPasswordConfirmation", () => {
 });
 
 describe("listTimeZones", () => {
-    it("keeps the current time zone even when the browser does not list it", () => {
-        const timeZones = listTimeZones("Europe/Kiev");
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
 
-        expect(timeZones).toContain("Europe/Kiev");
-        expect(timeZones).toEqual([...timeZones].sort());
+    // Список браузера подменяется: в Node 24 есть старое имя Europe/Kiev, а нового Europe/Kyiv нет, и так будет не всегда
+    it("keeps the current time zone even when the browser does not list it", () => {
+        vi.spyOn(Intl, "supportedValuesOf").mockReturnValue(["UTC", "Europe/Kiev"]);
+
+        expect(listTimeZones("Europe/Kyiv")).toEqual(["Europe/Kiev", "Europe/Kyiv", "UTC"]);
+    });
+
+    it("does not repeat a time zone the browser lists", () => {
+        vi.spyOn(Intl, "supportedValuesOf").mockReturnValue(["UTC", "Asia/Yekaterinburg"]);
+
+        expect(listTimeZones("UTC")).toEqual(["Asia/Yekaterinburg", "UTC"]);
     });
 });

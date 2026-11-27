@@ -102,8 +102,9 @@ def test_create_category_allows_name_used_elsewhere(send_json: JsonSender, name:
         ({"name": "к" * 61, "kind": "expense"}, ("name", "string_too_long")),
         ({"name": "Книги", "kind": "transfer_in"}, ("kind", "literal_error")),
         ({"name": "Книги", "kind": "expense", "is_common": True}, ("is_common", "extra_forbidden")),
+        ({"name": "Кни\x00ги", "kind": "expense"}, ("name", "planner_format")),
     ],
-    ids=["missing-kind", "empty-name", "long-name", "transfer-kind", "extra-field"],
+    ids=["missing-kind", "empty-name", "long-name", "transfer-kind", "extra-field", "null-character"],
 )
 def test_create_category_rejects_invalid_input(send_json: JsonSender, body: dict[str, object], expected_error: tuple[str, str]) -> None:
     response = send_json("POST", CATEGORIES_URL, body)
@@ -178,3 +179,13 @@ def test_foreign_category_is_not_found(send_json: JsonSender, foreign_category: 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["code"] == "not_found"
     assert foreign_category.name == "Рыбалка"
+
+
+@pytest.mark.usefixtures("signed_in_user")
+def test_rename_category_with_empty_body_changes_nothing(send_json: JsonSender, hobby: Category) -> None:
+    response = send_json("PATCH", build_category_url(hobby), {})
+    hobby.refresh_from_db()
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["name"] == "Хобби"
+    assert hobby.name == "Хобби"

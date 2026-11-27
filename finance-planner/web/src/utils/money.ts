@@ -68,12 +68,24 @@ export function normalizeAmountInput(text: string, isNegativeAllowed: boolean = 
         return null;
     }
 
-    if (compactText.startsWith("-") && !isNegativeAllowed) {
+    const isNegative = compactText.startsWith("-");
+
+    if (isNegative && !isNegativeAllowed) {
         return null;
     }
 
-    const [integerPart, fractionPart = ""] = compactText.split(".");
+    // Ведущие нули убираются, чтобы «00» распознавался как ноль ещё в браузере, а «−0» не давал отрицательного нуля
+    const [integerPart, fractionPart = ""] = compactText.replace("-", "").split(".");
+    const integerDigits = integerPart.replace(LEADING_ZEROS_PATTERN, "");
     const cents = fractionPart.padEnd(CENT_DIGITS, "0");
+    const isZero = ZERO_DIGITS_PATTERN.test(integerDigits) && ZERO_DIGITS_PATTERN.test(cents);
+    const sign = isNegative && !isZero ? "-" : "";
 
-    return `${integerPart}.${cents}`;
+    return `${sign}${integerDigits}.${cents}`;
+}
+
+export function isZeroAmount(normalizedAmount: string): boolean {
+    const [integerPart, fractionPart = ""] = normalizedAmount.replace("-", "").split(".");
+
+    return ZERO_DIGITS_PATTERN.test(integerPart) && ZERO_DIGITS_PATTERN.test(fractionPart.padEnd(CENT_DIGITS, "0"));
 }

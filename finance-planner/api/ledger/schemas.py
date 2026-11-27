@@ -17,7 +17,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from ledger.models import ACCOUNT_NAME_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, NOTE_MAX_LENGTH
+from ledger.models import ACCOUNT_NAME_MAX_LENGTH, CATEGORY_NAME_MAX_LENGTH, DEFAULT_CURRENCY, NOTE_MAX_LENGTH
 from users.schemas import StrictInput
 
 # Пробелы, плюс, запятая и экспонента не допускаются: [0-9] вместо \d, потому что \d в Python принимает и цифры других алфавитов
@@ -81,12 +81,7 @@ def format_money(value: Decimal) -> str:
 
 
 # Без явного описания OpenAPI показал бы у суммы «число или строку», хотя число JSON отклоняется
-POSITIVE_AMOUNT_JSON_SCHEMA = {
-    "type": "string",
-    "pattern": r"^[0-9]{1,12}(\.[0-9]{1,2})?$",
-    "description": "Больше нуля",
-    "examples": ["1250.50"],
-}
+POSITIVE_AMOUNT_JSON_SCHEMA = {"type": "string", "pattern": r"^[0-9]{1,12}(\.[0-9]{1,2})?$", "description": "Больше нуля", "examples": ["1250.50"]}
 
 SIGNED_AMOUNT_JSON_SCHEMA = {
     "type": "string",
@@ -95,7 +90,7 @@ SIGNED_AMOUNT_JSON_SCHEMA = {
     "examples": ["-250.00"],
 }
 
-# Ограничения стоят раньше BeforeValidator: так он выполняется первым, а ошибка «не больше нуля» остаётся greater_than
+# Field(gt=0) стоит раньше BeforeValidator: тогда граница в ctx ошибки greater_than остаётся Decimal и приходит строкой "0", как в docs/api.md
 PositiveAmount = Annotated[Decimal, Field(gt=0), BeforeValidator(check_positive_amount_format), WithJsonSchema(POSITIVE_AMOUNT_JSON_SCHEMA)]
 SignedAmount = Annotated[Decimal, BeforeValidator(check_signed_amount_format), WithJsonSchema(SIGNED_AMOUNT_JSON_SCHEMA)]
 PlannerDate = Annotated[date, BeforeValidator(check_date_format)]
@@ -126,7 +121,7 @@ class AccountCreateInput(StrictInput):
 
     name: AccountName
     kind: AccountKindValue
-    currency: CurrencyCode = "RUB"
+    currency: CurrencyCode = DEFAULT_CURRENCY
     initial_balance: SignedAmount = Decimal("0")
 
 

@@ -9,24 +9,30 @@ import { computed, reactive, ref, watch } from "vue";
 
 import FormField from "./FormField.vue";
 import { useAccountMutations } from "../composables/useAccounts";
+import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useFieldErrors } from "../composables/useFieldErrors";
 import { useNotifier } from "../composables/useNotifier";
 import { ApiError, describeError } from "../services/apiClient";
-import type { Account, AccountKind } from "../types/ledger";
+import type { Account, AccountKind, AccountUpdateInput } from "../types/ledger";
+import { buildCloseButtonProps } from "../utils/dialogs";
 import { checkRequired } from "../utils/formChecks";
+import { buildLabelId } from "../utils/formIds";
 import { ACCOUNT_KIND_LABELS, ACCOUNT_KIND_OPTIONS } from "../utils/ledgerLabels";
-import { normalizeAmountInput } from "../utils/money";
+import { MINUS_SIGN, NON_BREAKING_SPACE, normalizeAmountInput } from "../utils/money";
 
 const NAME_MAX_LENGTH = 100;
 const DEFAULT_KIND: AccountKind = "card";
 const DEFAULT_INITIAL_BALANCE = "0";
 const NAME_INPUT_ID = "account-name";
 const KIND_INPUT_ID = "account-kind";
+const KIND_LABEL_ID = buildLabelId(KIND_INPUT_ID);
 const BALANCE_INPUT_ID = "account-initial-balance";
 const ARCHIVE_INPUT_ID = "account-archived";
 const KIND_HINT = "Тип после создания не меняется";
 const BALANCE_HINT = "Сколько денег было на счёте до первой операции, можно с минусом";
-const AMOUNT_FORMAT_TEXT = "Введите сумму числом, например 15000.50 или -250";
+const NAME_TOO_LONG_TEXT = `Название не длиннее ${NAME_MAX_LENGTH} знаков`;
+// Пример записан так же, как суммы выводятся на экран: с пробелом между разрядами и знаком минуса. Ввод принимает и дефис
+const AMOUNT_FORMAT_TEXT = `Введите сумму числом, например 15${NON_BREAKING_SPACE}000.50 или ${MINUS_SIGN}250`;
 
 interface AccountForm {
     name: string;
@@ -57,10 +63,15 @@ const formError = ref("");
 const isEditing = computed(() => props.account !== null);
 const header = computed(() => (isEditing.value ? "Изменить счёт" : "Новый счёт"));
 const isSaving = computed(() => createMutation.isPending.value || updateMutation.isPending.value);
-const saveLabel = computed(() => (isSaving.value ? "Сохранение…" : "Сохранить"));
+const isSavingVisible = useDelayedFlag(isSaving);
+const saveLabel = computed(() => (isSavingVisible.value ? "Сохранение…" : "Сохранить"));
+const closeButtonProps = computed(() => buildCloseButtonProps(isSaving.value));
 const fixedFacts = computed(() => describeFixedFacts(props.account));
-const nameDescription = computed(() => describeInput(NAME_INPUT_ID, "name"));
-const balanceDescription = computed(() => describeInput(BALANCE_INPUT_ID, "initial_balance"));
+const nameDescription = computed(() => describeInput(NAME_INPUT_ID, "name", { isRequired: true }));
+const balanceDescription = computed(() => describeInput(BALANCE_INPUT_ID, "initial_balance", { hasHint: true, isRequired: true }));
+
+// Поле выбора PrimeVue — это span с ролью combobox: связи с подсказкой и ошибкой передаются ему через pass-through
+const kindPassThrough = computed(() => ({ label: describeInput(KIND_INPUT_ID, "kind", { hasHint: true, isRequired: true }) }));
 
 function describeFixedFacts(account: Account | null): string {
     if (account === null) {
@@ -101,11 +112,13 @@ function checkName(): void {
     }
 
     const isTooLong = form.name.trim().length > NAME_MAX_LENGTH;
-    setFieldError("name", isTooLong ? `Название не длиннее ${NAME_MAX_LENGTH} знаков` : null);
+
+    setFieldError("name", isTooLong ? NAME_TOO_LONG_TEXT : null);
 }
 
 function checkInitialBalance(): void {
     const isMalformed = normalizeAmountInput(form.initialBalance, true) === null;
+
     setFieldError("initial_balance", isMalformed ? AMOUNT_FORMAT_TEXT : null);
 }
 
@@ -125,18 +138,45 @@ function showSaveError(error: unknown): void {
     formError.value = describeError(error);
 }
 
-async function saveAccount(initialBalance: string): Promise<void> {
+// В PATCH уходят только изменённые поля, чтобы правка не затёрла то, что за это время поменяли в другой вкладке
+function collectAccountChanges(account: Account, initialBalance: string): AccountUpdateInput {
+    const changes: AccountUpdateInput = {};
     const name = form.name.trim();
 
-    if (props.account === null) {
-        await createMutation.mutateAsync({ name, kind: form.kind, initialBalance });
+    if (name !== account.name) {
+        changes.name = name;
+    }
+
+    if (initialBalance !== account.initialBalance) {
+        changes.initialBalance = initialBalance;
+    }
+
+    if (form.isArchived !== account.isArchived) {
+        changes.isArchived = form.isArchived;
+    }
+
+    return changes;
+}
+
+async function saveAccount(initialBalance: string): Promise<void> {
+    const account = props.account;
+
+    if (account === null) {
+        await createMutation.mutateAsync({ name: form.name.trim(), kind: form.kind, initialBalance });
         notifySuccess("Счёт добавлен");
 
         return;
     }
 
-    const changes = { name, initialBalance, isArchived: form.isArchived };
-    await updateMutation.mutateAsync({ accountId: props.account.id, changes });
+    const changes = collectAccountChanges(account, initialBalance);
+    const hasChanges = Object.keys(changes).length > 0;
+
+    // Без изменений запрос не нужен, диалог просто закрывается
+    if (!hasChanges) {
+        return;
+    }
+
+    await updateMutation.mutateAsync({ accountId: account.id, changes });
     notifySuccess("Счёт сохранён");
 }
 
@@ -148,6 +188,7 @@ async function save(): Promise<void> {
     formError.value = "";
     checkName();
     checkInitialBalance();
+
     const initialBalance = normalizeAmountInput(form.initialBalance, true);
 
     if (hasFieldErrors() || initialBalance === null) {
@@ -164,14 +205,23 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-    <Dialog v-model:visible="isVisible" :header="header" modal :draggable="false">
+    <Dialog
+        v-model:visible="isVisible"
+        :header="header"
+        modal
+        :draggable="false"
+        :close-on-escape="!isSaving"
+        :close-button-props="closeButtonProps"
+    >
         <form class="dialog-form" novalidate @submit.prevent="save">
+            <!-- Диалог ставит фокус на первый элемент с autofocus, без него фокус попал бы на крестик закрытия -->
             <FormField label="Название" :input-id="NAME_INPUT_ID" :error="fieldErrors.name" is-required>
                 <InputText
                     :id="NAME_INPUT_ID"
                     v-model="form.name"
                     v-bind="nameDescription"
                     :invalid="Boolean(fieldErrors.name)"
+                    autofocus
                     fluid
                     @blur="checkName"
                 />
@@ -181,6 +231,8 @@ async function save(): Promise<void> {
                 <Select
                     v-model="form.kind"
                     :input-id="KIND_INPUT_ID"
+                    :aria-labelledby="KIND_LABEL_ID"
+                    :pt="kindPassThrough"
                     :options="ACCOUNT_KIND_OPTIONS"
                     option-label="label"
                     option-value="value"
@@ -219,7 +271,7 @@ async function save(): Promise<void> {
             <Message v-if="formError" severity="error" :closable="false">{{ formError }}</Message>
 
             <div class="dialog-form__actions">
-                <Button type="submit" :label="saveLabel" :loading="isSaving" :disabled="isSaving" />
+                <Button type="submit" :label="saveLabel" :loading="isSavingVisible" :disabled="isSaving" />
                 <Button type="button" label="Отмена" severity="secondary" outlined :disabled="isSaving" @click="close" />
             </div>
         </form>

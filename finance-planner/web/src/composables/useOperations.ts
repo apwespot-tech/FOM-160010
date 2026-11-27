@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { computed } from "vue";
 import type { Ref } from "vue";
 
+import { ApiError } from "../services/apiClient";
 import { createOperation, deleteOperation, fetchOperations, updateOperation } from "../services/operationsApi";
 import { queryKeys } from "../services/queryKeys";
 import type { OperationChanges, OperationListParameters } from "../types/ledger";
@@ -34,6 +35,13 @@ export function useOperationMutations() {
         ]);
     }
 
+    // Ответ 404 значит, что операцию уже удалили в другой вкладке: список обновляется, как обещает docs/api.md
+    async function refreshAfterMissing(error: Error): Promise<void> {
+        if (error instanceof ApiError && error.code === "not_found") {
+            await refreshLedger();
+        }
+    }
+
     const createMutation = useMutation({
         mutationFn: createOperation,
         onSuccess: refreshLedger,
@@ -42,11 +50,13 @@ export function useOperationMutations() {
     const updateMutation = useMutation({
         mutationFn: ({ operationId, changes }: OperationUpdate) => updateOperation(operationId, changes),
         onSuccess: refreshLedger,
+        onError: refreshAfterMissing,
     });
 
     const deleteMutation = useMutation({
         mutationFn: deleteOperation,
         onSuccess: refreshLedger,
+        onError: refreshAfterMissing,
     });
 
     return {

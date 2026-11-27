@@ -2,7 +2,6 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import RestrictedError
 
 from ledger.models import Account, Category, DEFAULT_CURRENCY, Operation
 from users.models import User
@@ -52,8 +51,8 @@ def sum_balances(accounts: list[Account]) -> Decimal:
     return sum(balances, Decimal("0"))
 
 
-def read_account_with_balance(account_id: int) -> Account:
-    return Account.objects.with_balance().get(id=account_id)
+def read_account_with_balance(user_id: int, account_id: int) -> Account:
+    return Account.objects.filter(user_id=user_id).with_balance().get(id=account_id)
 
 
 def create_account(user: User, name: str, kind: str, currency: str, initial_balance: Decimal) -> Account:
@@ -63,7 +62,7 @@ def create_account(user: User, name: str, kind: str, currency: str, initial_bala
 
     account = Account.objects.create(user=user, name=name, kind=kind, currency=currency, initial_balance=initial_balance)
 
-    return read_account_with_balance(account.id)
+    return read_account_with_balance(user.id, account.id)
 
 
 def update_account(account: Account, changes: dict[str, object]) -> Account:
@@ -73,15 +72,15 @@ def update_account(account: Account, changes: dict[str, object]) -> Account:
     if changes:
         account.save(update_fields=list(changes))
 
-    return read_account_with_balance(account.id)
+    return read_account_with_balance(account.user_id, account.id)
 
 
 def delete_account(account: Account) -> None:
     try:
         with transaction.atomic():
             account.delete()
-    except (IntegrityError, RestrictedError) as error:
-        # IntegrityError страхует от ссылки, которая появилась между проверкой Django и удалением строки
+    except IntegrityError as error:
+        # RestrictedError наследует IntegrityError, и тот же перехват ловит ссылку, появившуюся между проверкой Django и удалением
         raise AccountInUseError from error
 
 
@@ -135,7 +134,7 @@ def delete_category(category: Category) -> None:
     try:
         with transaction.atomic():
             category.delete()
-    except (IntegrityError, RestrictedError) as error:
+    except IntegrityError as error:
         raise CategoryInUseError from error
 
 
@@ -187,30 +186,39 @@ def check_account_change(user: User, operation: Operation, new_account_id: int) 
     return []
 
 
-def create_operation(
-    user: User,
-    kind: str,
-    account_id: int,
-    category_id: int,
-    amount: Decimal,
-    operation_date: date,
-    note: str,
-) -> Operation:
+def recheck_references(user: User, account_id: int, category_id: int, operation_kind: str) -> FieldErrors:
+    # Внешний ключ проверяется при фиксации транзакции: счёт или категорию могли удалить между проверкой и записью
+    account_errors = check_selected_account(find_own_account(user, account_id))
+    category_errors = check_selected_category(find_visible_category(user, category_id), operation_kind)
+
+    return account_errors + category_errors
+
+
+def create_operation(user: User, kind: str, account_id: int, category_id: int, amount: Decimal, operation_date: date, note: str) -> Operation:
     account = find_own_account(user, account_id)
     category = find_visible_category(user, category_id)
     field_errors = check_selected_account(account) + check_selected_category(category, kind) + check_operation_date(user, operation_date)
     raise_if_errors(field_errors)
 
-    # Владелец операции берётся из проверенного счёта: так он всегда совпадает с владельцем счёта
-    return Operation.objects.create(
-        user=account.user,
-        account=account,
-        category=category,
-        kind=kind,
-        amount=amount,
-        date=operation_date,
-        note=note,
-    )
+    try:
+        with transaction.atomic():
+            # Владелец операции берётся из проверенного счёта: так он всегда совпадает с владельцем счёта
+            return Operation.objects.create(
+                user_id=account.user_id,
+                account=account,
+                category=category,
+                kind=kind,
+                amount=amount,
+                date=operation_date,
+                note=note,
+            )
+    except IntegrityError as error:
+        reference_errors = recheck_references(user, account_id, category_id, kind)
+
+        if reference_errors:
+            raise LedgerRuleError(reference_errors) from error
+
+        raise
 
 
 def update_operation(user: User, operation: Operation, changes: dict[str, object]) -> Operation:
@@ -238,8 +246,19 @@ def update_operation(user: User, operation: Operation, changes: dict[str, object
     for field_name, value in changes.items():
         setattr(operation, field_name, value)
 
-    if changes:
-        operation.save(update_fields=list(changes))
+    if not changes:
+        return operation
+
+    try:
+        with transaction.atomic():
+            operation.save(update_fields=list(changes))
+    except IntegrityError as error:
+        reference_errors = recheck_references(user, new_account_id, new_category_id, operation.kind)
+
+        if reference_errors:
+            raise LedgerRuleError(reference_errors) from error
+
+        raise
 
     return operation
 

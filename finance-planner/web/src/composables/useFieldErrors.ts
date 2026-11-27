@@ -1,8 +1,14 @@
 import { ref } from "vue";
 
 import type { FieldErrors } from "../types/api";
+import { buildErrorId, buildHintId } from "../utils/formIds";
 
 export type InputDescription = Record<string, string | undefined>;
+
+export interface InputDescriptionOptions {
+    hasHint?: boolean;
+    isRequired?: boolean;
+}
 
 export function useFieldErrors() {
     const fieldErrors = ref<FieldErrors>({});
@@ -31,13 +37,26 @@ export function useFieldErrors() {
         return Object.keys(fieldErrors.value).length > 0;
     }
 
-    // Связывает поле с текстом ошибки под ним, чтобы экранный диктор прочитал её вместе с полем
-    function describeInput(inputId: string, fieldName: string): InputDescription {
+    function readDescriptionId(inputId: string, fieldName: string, hasHint: boolean): string | undefined {
+        if (fieldName in fieldErrors.value) {
+            return buildErrorId(inputId);
+        }
+
+        if (hasHint) {
+            return buildHintId(inputId);
+        }
+
+        return undefined;
+    }
+
+    // Связывает поле с ошибкой или подсказкой под ним, чтобы экранный диктор прочитал их вместе с полем
+    function describeInput(inputId: string, fieldName: string, options: InputDescriptionOptions = {}): InputDescription {
         const hasError = fieldName in fieldErrors.value;
 
         return {
-            "aria-describedby": hasError ? `${inputId}-error` : undefined,
+            "aria-describedby": readDescriptionId(inputId, fieldName, options.hasHint === true),
             "aria-invalid": hasError ? "true" : undefined,
+            "aria-required": options.isRequired === true ? "true" : undefined,
         };
     }
 

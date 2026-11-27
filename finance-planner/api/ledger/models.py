@@ -13,6 +13,10 @@ CURRENCY_CODE_PATTERN = r"^[A-Z]{3}$"
 ACCOUNT_NAME_MAX_LENGTH = 100
 CATEGORY_NAME_MAX_LENGTH = 60
 NOTE_MAX_LENGTH = 255
+ACCOUNT_KIND_MAX_LENGTH = 16
+CURRENCY_CODE_LENGTH = 3
+CATEGORY_KIND_MAX_LENGTH = 8
+OPERATION_KIND_MAX_LENGTH = 12
 
 
 class AccountKind(models.TextChoices):
@@ -80,8 +84,8 @@ class OperationQuerySet(models.QuerySet):
 class Account(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="accounts", verbose_name="владелец")
     name = models.CharField("название", max_length=ACCOUNT_NAME_MAX_LENGTH)
-    kind = models.CharField("тип", max_length=16, choices=AccountKind.choices)
-    currency = models.CharField("валюта", max_length=3, default=DEFAULT_CURRENCY)
+    kind = models.CharField("тип", max_length=ACCOUNT_KIND_MAX_LENGTH, choices=AccountKind.choices)
+    currency = models.CharField("валюта", max_length=CURRENCY_CODE_LENGTH, default=DEFAULT_CURRENCY)
     initial_balance = models.DecimalField("начальный остаток", max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES, default=Decimal("0"))
     is_archived = models.BooleanField("в архиве", default=False)
     created_at = models.DateTimeField("создан", auto_now_add=True)
@@ -113,7 +117,7 @@ class Category(models.Model):
     )
 
     name = models.CharField("название", max_length=CATEGORY_NAME_MAX_LENGTH)
-    kind = models.CharField("вид", max_length=8, choices=CategoryKind.choices)
+    kind = models.CharField("вид", max_length=CATEGORY_KIND_MAX_LENGTH, choices=CategoryKind.choices)
 
     objects = CategoryQuerySet.as_manager()
 
@@ -169,39 +173,14 @@ class Transfer(models.Model):
 
 class Operation(models.Model):
     # Отдельные индексы по владельцу и счёту не создаются: их покрывают составные индексы с датой в Meta.indexes
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        db_index=False,
-        related_name="operations",
-        verbose_name="владелец",
-    )
-
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, db_index=False, related_name="operations", verbose_name="владелец")
     account = models.ForeignKey(Account, on_delete=models.RESTRICT, db_index=False, related_name="operations", verbose_name="счёт")
-
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.RESTRICT,
-        null=True,
-        blank=True,
-        related_name="operations",
-        verbose_name="категория",
-    )
-
-    kind = models.CharField("вид", max_length=12, choices=OperationKind.choices)
+    category = models.ForeignKey(Category, on_delete=models.RESTRICT, null=True, blank=True, related_name="operations", verbose_name="категория")
+    kind = models.CharField("вид", max_length=OPERATION_KIND_MAX_LENGTH, choices=OperationKind.choices)
     amount = models.DecimalField("сумма", max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES)
     date = models.DateField("дата")
     note = models.CharField("заметка", max_length=NOTE_MAX_LENGTH, blank=True, default="")
-
-    transfer = models.ForeignKey(
-        Transfer,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="operations",
-        verbose_name="перевод",
-    )
-
+    transfer = models.ForeignKey(Transfer, on_delete=models.CASCADE, null=True, blank=True, related_name="operations", verbose_name="перевод")
     created_at = models.DateTimeField("создана", auto_now_add=True)
 
     objects = OperationQuerySet.as_manager()

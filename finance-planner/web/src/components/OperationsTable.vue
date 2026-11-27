@@ -13,7 +13,8 @@ const DATE_FIELD = "date";
 const ASCENDING_ORDER = 1;
 const DESCENDING_ORDER = -1;
 const ROWS_PER_PAGE_OPTIONS = [20, 50, 100];
-const TRANSFER_NOTE = "Часть перевода, меняется вместе с переводом";
+// Текст виден и на сенсорном экране, где всплывающую подсказку не прочесть
+const TRANSFER_NOTE = "Часть перевода";
 const MISSING_NAME = "нет данных";
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const props = defineProps<{
     isLoading: boolean;
     accounts: Account[];
     categories: Category[];
+    busyOperationIds: ReadonlySet<number>;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +68,11 @@ function readAmountClass(operation: Operation): string {
 
 function isTransferPart(operation: Operation): boolean {
     return operation.transferId !== null;
+}
+
+// Пока строка удаляется, её кнопки недоступны: повторное нажатие отправило бы второй DELETE
+function isBusy(operation: Operation): boolean {
+    return props.busyOperationIds.has(operation.id);
 }
 
 function describeOperation(operation: Operation): string {
@@ -156,7 +163,7 @@ function requestRemoval(operation: Operation): void {
                 <span class="visually-hidden">Действия</span>
             </template>
             <template #body="{ data }">
-                <div v-if="isTransferPart(data)" class="operations-table__transfer" :title="TRANSFER_NOTE">Перевод</div>
+                <div v-if="isTransferPart(data)" class="operations-table__transfer">{{ TRANSFER_NOTE }}</div>
                 <div v-else class="operations-table__actions">
                     <Button
                         severity="secondary"
@@ -165,6 +172,7 @@ function requestRemoval(operation: Operation): void {
                         size="small"
                         :aria-label="readEditLabel(data)"
                         title="Изменить"
+                        :disabled="isBusy(data)"
                         @click="requestEdit(data)"
                     >
                         <template #icon>
@@ -180,6 +188,7 @@ function requestRemoval(operation: Operation): void {
                         size="small"
                         :aria-label="readRemovalLabel(data)"
                         title="Удалить"
+                        :disabled="isBusy(data)"
                         @click="requestRemoval(data)"
                     >
                         <template #icon>

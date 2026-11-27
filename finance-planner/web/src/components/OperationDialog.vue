@@ -6,17 +6,22 @@ import InputText from "primevue/inputtext";
 import Message from "primevue/message";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
+import type { SelectButtonPassThroughOptions } from "primevue/selectbutton";
+import type { ToggleButtonPassThroughMethodOptions } from "primevue/togglebutton";
 import { computed, reactive, ref, watch } from "vue";
 
 import FormField from "./FormField.vue";
+import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useFieldErrors } from "../composables/useFieldErrors";
 import { useNotifier } from "../composables/useNotifier";
 import { useOperationMutations } from "../composables/useOperations";
 import { ApiError, describeError } from "../services/apiClient";
-import type { Account, Category, CategoryKind, Operation } from "../types/ledger";
+import type { Account, Category, CategoryKind, Operation, OperationChanges } from "../types/ledger";
 import { isoDateToLocalDate, localDateToIsoDate, readTodayInTimeZone } from "../utils/dates";
-import { CATEGORY_KIND_LABELS } from "../utils/ledgerLabels";
-import { normalizeAmountInput } from "../utils/money";
+import { buildCloseButtonProps } from "../utils/dialogs";
+import { buildLabelId } from "../utils/formIds";
+import { CATEGORY_KIND_LABELS, CATEGORY_KIND_OPTIONS, isCategoryKind } from "../utils/ledgerLabels";
+import { isZeroAmount, normalizeAmountInput } from "../utils/money";
 
 interface OperationForm {
     kind: CategoryKind;
@@ -27,26 +32,42 @@ interface OperationForm {
     note: string;
 }
 
+interface OperationValues {
+    accountId: number;
+    categoryId: number;
+    amount: string;
+    date: string;
+    note: string;
+}
+
 interface SelectOption {
     value: number;
     label: string;
 }
 
 const NOTE_MAX_LENGTH = 255;
-const ZERO_AMOUNT = "0.00";
 const DEFAULT_KIND: CategoryKind = "expense";
-
-const KIND_OPTIONS = [
-    { value: "expense", label: "Расход" },
-    { value: "income", label: "Доход" },
-];
-
+const KIND_LABEL_ID = "operation-kind-label";
 const ACCOUNT_INPUT_ID = "operation-account";
+const ACCOUNT_LABEL_ID = buildLabelId(ACCOUNT_INPUT_ID);
 const CATEGORY_INPUT_ID = "operation-category";
+const CATEGORY_LABEL_ID = buildLabelId(CATEGORY_INPUT_ID);
 const AMOUNT_INPUT_ID = "operation-amount";
 const DATE_INPUT_ID = "operation-date";
 const NOTE_INPUT_ID = "operation-note";
 const DATE_HINT = "Не позже сегодняшнего дня. Будущие платежи заводятся периодическими правилами";
+const AMOUNT_FORMAT_TEXT = "Введите сумму числом, например 1250.50";
+const AMOUNT_NOT_POSITIVE_TEXT = "Сумма должна быть больше нуля";
+const NOTE_TOO_LONG_TEXT = `Заметка не длиннее ${NOTE_MAX_LENGTH} знаков`;
+
+// Диалог ставит фокус на первый элемент с autofocus. У выбора вида это нажатая кнопка, иначе фокус попал бы на крестик закрытия
+function markPressedKindButton(options: ToggleButtonPassThroughMethodOptions): { autofocus: boolean } {
+    return { autofocus: options.props.modelValue === true };
+}
+
+const KIND_PASS_THROUGH: SelectButtonPassThroughOptions = {
+    pcToggleButton: { root: markPressedKindButton },
+};
 
 const props = defineProps<{
     operation: Operation | null;
@@ -71,15 +92,27 @@ const form = reactive<OperationForm>({
 });
 
 const formError = ref("");
+const todayDate = ref<Date | null>(null);
 
 const isEditing = computed(() => props.operation !== null);
 const header = computed(() => (isEditing.value ? "Изменить операцию" : "Новая операция"));
 const isSaving = computed(() => createMutation.isPending.value || updateMutation.isPending.value);
-const saveLabel = computed(() => (isSaving.value ? "Сохранение…" : "Сохранить"));
+const isSavingVisible = useDelayedFlag(isSaving);
+const saveLabel = computed(() => (isSavingVisible.value ? "Сохранение…" : "Сохранить"));
+const closeButtonProps = computed(() => buildCloseButtonProps(isSaving.value));
 const kindFact = computed(() => `Вид: ${CATEGORY_KIND_LABELS[form.kind]}. Вид после создания не меняется`);
-const maxDate = computed(() => isoDateToLocalDate(readTodayInTimeZone(props.timeZone)) ?? undefined);
-const amountDescription = computed(() => describeInput(AMOUNT_INPUT_ID, "amount"));
+const maxDate = computed(() => todayDate.value ?? undefined);
+const amountDescription = computed(() => describeInput(AMOUNT_INPUT_ID, "amount", { isRequired: true }));
 const noteDescription = computed(() => describeInput(NOTE_INPUT_ID, "note"));
+
+// Поля выбора и календарь PrimeVue передают связи с подсказкой и ошибкой своему фокусируемому элементу через pass-through.
+// При правке первым идёт счёт, поэтому фокус при открытии ставится на него
+const accountPassThrough = computed(() => ({
+    label: { ...describeInput(ACCOUNT_INPUT_ID, "account_id", { isRequired: true }), autofocus: isEditing.value },
+}));
+
+const categoryPassThrough = computed(() => ({ label: describeInput(CATEGORY_INPUT_ID, "category_id", { isRequired: true }) }));
+const datePassThrough = computed(() => ({ pcInputText: { root: describeInput(DATE_INPUT_ID, "date", { hasHint: true, isRequired: true }) } }));
 
 // Архивный счёт нельзя выбрать заново, но уже записанная на нём операция остаётся на нём
 const accountOptions = computed<SelectOption[]>(() => {
@@ -114,15 +147,25 @@ function chooseDefaultAccountId(): number | null {
     return null;
 }
 
+// Части перевода в этом диалоге не правятся, поэтому вид операции здесь всегда доход или расход
+function readFormKind(operation: Operation | null): CategoryKind {
+    if (operation !== null && isCategoryKind(operation.kind)) {
+        return operation.kind;
+    }
+
+    return DEFAULT_KIND;
+}
+
 function resetForm(): void {
     const operation = props.operation;
-    const todayDate = isoDateToLocalDate(readTodayInTimeZone(props.timeZone));
 
-    form.kind = operation === null ? DEFAULT_KIND : (operation.kind as CategoryKind);
+    // Сегодняшний день пересчитывается при каждом открытии: вкладка могла пролежать открытой с вечера
+    todayDate.value = isoDateToLocalDate(readTodayInTimeZone(props.timeZone));
+    form.kind = readFormKind(operation);
     form.accountId = operation?.accountId ?? chooseDefaultAccountId();
     form.categoryId = operation?.categoryId ?? null;
     form.amount = operation?.amount ?? "";
-    form.date = operation === null ? todayDate : isoDateToLocalDate(operation.date);
+    form.date = operation === null ? todayDate.value : isoDateToLocalDate(operation.date);
     form.note = operation?.note ?? "";
     formError.value = "";
     clearFieldErrors();
@@ -159,15 +202,18 @@ function checkCategory(): void {
 }
 
 function checkAmount(): void {
-    const normalizedAmount = normalizeAmountInput(form.amount);
+    const normalizedAmount = normalizeAmountInput(form.amount, true);
 
     if (normalizedAmount === null) {
-        setFieldError("amount", "Введите сумму числом, например 1250.50");
+        setFieldError("amount", AMOUNT_FORMAT_TEXT);
 
         return;
     }
 
-    setFieldError("amount", normalizedAmount === ZERO_AMOUNT ? "Сумма должна быть больше нуля" : null);
+    // Сумма с минусом записана верно, но не подходит: доход от расхода отличает вид, а не знак
+    const isPositive = !normalizedAmount.startsWith("-") && !isZeroAmount(normalizedAmount);
+
+    setFieldError("amount", isPositive ? null : AMOUNT_NOT_POSITIVE_TEXT);
 }
 
 function checkDate(): void {
@@ -176,17 +222,35 @@ function checkDate(): void {
 
 function checkNote(): void {
     const isTooLong = form.note.trim().length > NOTE_MAX_LENGTH;
-    setFieldError("note", isTooLong ? `Заметка не длиннее ${NOTE_MAX_LENGTH} знаков` : null);
+
+    setFieldError("note", isTooLong ? NOTE_TOO_LONG_TEXT : null);
 }
 
-function checkForm(): boolean {
+function checkForm(): void {
     checkAccount();
     checkCategory();
     checkAmount();
     checkDate();
     checkNote();
+}
 
-    return !hasFieldErrors();
+// Значения собираются из уже проверенной формы, поэтому пустых счёта, категории, суммы и даты в них не бывает
+function readFormValues(): OperationValues | null {
+    const { accountId, categoryId, date } = form;
+    const amount = normalizeAmountInput(form.amount);
+    const isIncomplete = accountId === null || categoryId === null || date === null || amount === null;
+
+    if (isIncomplete) {
+        return null;
+    }
+
+    return {
+        accountId,
+        categoryId,
+        amount,
+        date: localDateToIsoDate(date),
+        note: form.note.trim(),
+    };
 }
 
 function close(): void {
@@ -205,23 +269,52 @@ function showSaveError(error: unknown): void {
     formError.value = describeError(error);
 }
 
-async function saveOperation(): Promise<void> {
-    const values = {
-        accountId: form.accountId as number,
-        categoryId: form.categoryId as number,
-        amount: normalizeAmountInput(form.amount) as string,
-        date: localDateToIsoDate(form.date as Date),
-        note: form.note.trim(),
-    };
+// В PATCH уходят только изменённые поля, чтобы правка не затёрла то, что за это время поменяли в другой вкладке
+function collectOperationChanges(operation: Operation, values: OperationValues): OperationChanges {
+    const changes: OperationChanges = {};
 
-    if (props.operation === null) {
+    if (values.accountId !== operation.accountId) {
+        changes.accountId = values.accountId;
+    }
+
+    if (values.categoryId !== operation.categoryId) {
+        changes.categoryId = values.categoryId;
+    }
+
+    if (values.amount !== operation.amount) {
+        changes.amount = values.amount;
+    }
+
+    if (values.date !== operation.date) {
+        changes.date = values.date;
+    }
+
+    if (values.note !== operation.note) {
+        changes.note = values.note;
+    }
+
+    return changes;
+}
+
+async function saveOperation(values: OperationValues): Promise<void> {
+    const operation = props.operation;
+
+    if (operation === null) {
         await createMutation.mutateAsync({ kind: form.kind, ...values });
         notifySuccess("Операция добавлена");
 
         return;
     }
 
-    await updateMutation.mutateAsync({ operationId: props.operation.id, changes: values });
+    const changes = collectOperationChanges(operation, values);
+    const hasChanges = Object.keys(changes).length > 0;
+
+    // Без изменений запрос не нужен, диалог просто закрывается
+    if (!hasChanges) {
+        return;
+    }
+
+    await updateMutation.mutateAsync({ operationId: operation.id, changes });
     notifySuccess("Операция сохранена");
 }
 
@@ -231,13 +324,16 @@ async function save(): Promise<void> {
     }
 
     formError.value = "";
+    checkForm();
 
-    if (!checkForm()) {
+    const values = readFormValues();
+
+    if (hasFieldErrors() || values === null) {
         return;
     }
 
     try {
-        await saveOperation();
+        await saveOperation(values);
         close();
     } catch (error) {
         showSaveError(error);
@@ -246,17 +342,25 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-    <Dialog v-model:visible="isVisible" :header="header" modal :draggable="false">
+    <Dialog
+        v-model:visible="isVisible"
+        :header="header"
+        modal
+        :draggable="false"
+        :close-on-escape="!isSaving"
+        :close-button-props="closeButtonProps"
+    >
         <form class="dialog-form" novalidate @submit.prevent="save">
-            <div v-if="!isEditing" class="form-field-group" role="group" aria-labelledby="operation-kind-label">
-                <span id="operation-kind-label" class="operation-dialog__label">Вид</span>
+            <div v-if="!isEditing" class="form-field-group" role="group" :aria-labelledby="KIND_LABEL_ID">
+                <span :id="KIND_LABEL_ID" class="operation-dialog__label">Вид</span>
                 <SelectButton
                     v-model="form.kind"
-                    :options="KIND_OPTIONS"
+                    :options="CATEGORY_KIND_OPTIONS"
                     option-label="label"
                     option-value="value"
                     :allow-empty="false"
-                    aria-labelledby="operation-kind-label"
+                    :aria-labelledby="KIND_LABEL_ID"
+                    :pt="KIND_PASS_THROUGH"
                 />
             </div>
             <p v-else class="dialog-form__fact">{{ kindFact }}</p>
@@ -265,6 +369,8 @@ async function save(): Promise<void> {
                 <Select
                     v-model="form.accountId"
                     :input-id="ACCOUNT_INPUT_ID"
+                    :aria-labelledby="ACCOUNT_LABEL_ID"
+                    :pt="accountPassThrough"
                     :options="accountOptions"
                     option-label="label"
                     option-value="value"
@@ -279,6 +385,8 @@ async function save(): Promise<void> {
                 <Select
                     v-model="form.categoryId"
                     :input-id="CATEGORY_INPUT_ID"
+                    :aria-labelledby="CATEGORY_LABEL_ID"
+                    :pt="categoryPassThrough"
                     :options="categoryOptions"
                     option-label="label"
                     option-value="value"
@@ -309,6 +417,7 @@ async function save(): Promise<void> {
                 <DatePicker
                     v-model="form.date"
                     :input-id="DATE_INPUT_ID"
+                    :pt="datePassThrough"
                     date-format="yy-mm-dd"
                     :max-date="maxDate"
                     :invalid="Boolean(fieldErrors.date)"
@@ -333,7 +442,7 @@ async function save(): Promise<void> {
             <Message v-if="formError" severity="error" :closable="false">{{ formError }}</Message>
 
             <div class="dialog-form__actions">
-                <Button type="submit" :label="saveLabel" :loading="isSaving" :disabled="isSaving" />
+                <Button type="submit" :label="saveLabel" :loading="isSavingVisible" :disabled="isSaving" />
                 <Button type="button" label="Отмена" severity="secondary" outlined :disabled="isSaving" @click="close" />
             </div>
         </form>

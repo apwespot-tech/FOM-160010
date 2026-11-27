@@ -27,7 +27,7 @@ def build_operation_url(operation: Operation) -> str:
     return f"{OPERATIONS_URL}/{operation.id}"
 
 
-def build_expense_body(account: Account, category: Category, **changes: object) -> dict[str, object]:
+def build_operation_body(account: Account, category: Category, **changes: object) -> dict[str, object]:
     body = {"kind": "expense", "account_id": account.id, "category_id": category.id, "amount": "1250.5", "date": "2026-11-18"}
 
     return body | changes
@@ -55,7 +55,7 @@ def paged_operations(card_account: Account, groceries: Category) -> list[Operati
 
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
-    body = build_expense_body(card_account, groceries, note=" Продукты на неделю ")
+    body = build_operation_body(card_account, groceries, note=" Продукты на неделю ")
     response = send_json("POST", OPERATIONS_URL, body)
     created_operation = Operation.objects.get()
     response_body = response.json()
@@ -80,7 +80,7 @@ def test_create_operation(send_json: JsonSender, card_account: Account, grocerie
 
 @pytest.mark.usefixtures("signed_in_user", "frozen_now")
 def test_create_operation_accepts_users_today(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
-    body = build_expense_body(card_account, groceries, date=USER_TODAY.isoformat())
+    body = build_operation_body(card_account, groceries, date=USER_TODAY.isoformat())
     response = send_json("POST", OPERATIONS_URL, body)
 
     assert response.status_code == HTTPStatus.CREATED
@@ -89,7 +89,7 @@ def test_create_operation_accepts_users_today(send_json: JsonSender, card_accoun
 @pytest.mark.usefixtures("signed_in_user", "frozen_now")
 def test_create_operation_rejects_future_date(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
     tomorrow = USER_TODAY + timedelta(days=1)
-    body = build_expense_body(card_account, groceries, date=tomorrow.isoformat())
+    body = build_operation_body(card_account, groceries, date=tomorrow.isoformat())
     response = send_json("POST", OPERATIONS_URL, body)
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
@@ -101,8 +101,8 @@ def test_create_operation_rejects_future_date(send_json: JsonSender, card_accoun
 def test_today_depends_on_users_time_zone(csrf_client: Client, send_json: JsonSender, other_user: User, groceries: Category) -> None:
     utc_account = make_account(other_user)
     csrf_client.force_login(other_user)
-    today_body = build_expense_body(utc_account, groceries, date=UTC_TODAY.isoformat())
-    tomorrow_body = build_expense_body(utc_account, groceries, date=USER_TODAY.isoformat())
+    today_body = build_operation_body(utc_account, groceries, date=UTC_TODAY.isoformat())
+    tomorrow_body = build_operation_body(utc_account, groceries, date=USER_TODAY.isoformat())
 
     assert send_json("POST", OPERATIONS_URL, today_body).status_code == HTTPStatus.CREATED
     assert send_json("POST", OPERATIONS_URL, tomorrow_body).status_code == HTTPStatus.UNPROCESSABLE_CONTENT
@@ -153,7 +153,7 @@ def test_create_operation_rejects_invalid_input(
     changes: dict[str, object],
     expected_error: tuple[str, str],
 ) -> None:
-    body = build_expense_body(card_account, groceries) | changes
+    body = build_operation_body(card_account, groceries) | changes
     response = send_json("POST", OPERATIONS_URL, body)
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
@@ -164,7 +164,7 @@ def test_create_operation_rejects_invalid_input(
 
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation_requires_amount(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
-    body = build_expense_body(card_account, groceries)
+    body = build_operation_body(card_account, groceries)
     del body["amount"]
     response = send_json("POST", OPERATIONS_URL, body)
 
@@ -175,7 +175,7 @@ def test_create_operation_requires_amount(send_json: JsonSender, card_account: A
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation_rejects_foreign_account_and_category(send_json: JsonSender, foreign_account: Account, other_user: User) -> None:
     foreign_category = Category.objects.create(user=other_user, name="Рыбалка", kind="expense")
-    response = send_json("POST", OPERATIONS_URL, build_expense_body(foreign_account, foreign_category))
+    response = send_json("POST", OPERATIONS_URL, build_operation_body(foreign_account, foreign_category))
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert read_messages(response) == {"account_id": "Счёт не найден", "category_id": "Категория не найдена"}
@@ -184,7 +184,7 @@ def test_create_operation_rejects_foreign_account_and_category(send_json: JsonSe
 
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation_rejects_missing_objects(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
-    body = build_expense_body(card_account, groceries, account_id=card_account.id + 1000, category_id=groceries.id + 1000)
+    body = build_operation_body(card_account, groceries, account_id=card_account.id + 1000, category_id=groceries.id + 1000)
     response = send_json("POST", OPERATIONS_URL, body)
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
@@ -194,7 +194,7 @@ def test_create_operation_rejects_missing_objects(send_json: JsonSender, card_ac
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation_rejects_archived_account(send_json: JsonSender, user: User, groceries: Category) -> None:
     archived_account = make_account(user, is_archived=True)
-    response = send_json("POST", OPERATIONS_URL, build_expense_body(archived_account, groceries))
+    response = send_json("POST", OPERATIONS_URL, build_operation_body(archived_account, groceries))
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert read_messages(response) == {"account_id": "Счёт в архиве"}
@@ -202,7 +202,7 @@ def test_create_operation_rejects_archived_account(send_json: JsonSender, user: 
 
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_operation_rejects_category_of_other_kind(send_json: JsonSender, card_account: Account, salary: Category) -> None:
-    response = send_json("POST", OPERATIONS_URL, build_expense_body(card_account, salary))
+    response = send_json("POST", OPERATIONS_URL, build_operation_body(card_account, salary))
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert read_messages(response) == {"category_id": "Вид категории не совпадает с видом операции"}
@@ -211,7 +211,7 @@ def test_create_operation_rejects_category_of_other_kind(send_json: JsonSender, 
 @pytest.mark.usefixtures("signed_in_user")
 def test_create_income_with_own_category(send_json: JsonSender, user: User, card_account: Account) -> None:
     side_job = Category.objects.create(user=user, name="Подработка", kind="income")
-    body = build_expense_body(card_account, side_job, kind="income")
+    body = build_operation_body(card_account, side_job, kind="income")
     response = send_json("POST", OPERATIONS_URL, body)
 
     assert response.status_code == HTTPStatus.CREATED
@@ -343,13 +343,7 @@ def test_update_operation_changes_fields_and_balance(send_json: JsonSender, user
     balances = {item["name"]: item["balance"] for item in accounts_response.json()["items"]}
     changed_fields = {field_name: response.json()[field_name] for field_name in ("account_id", "category_id", "amount", "date", "note")}
 
-    expected_fields = {
-        "account_id": cash_account.id,
-        "category_id": cafe.id,
-        "amount": "150.00",
-        "date": "2026-11-17",
-        "note": "Обед",
-    }
+    expected_fields = {"account_id": cash_account.id, "category_id": cafe.id, "amount": "150.00", "date": "2026-11-17", "note": "Обед"}
 
     assert response.status_code == HTTPStatus.OK
     assert changed_fields == expected_fields
@@ -450,10 +444,10 @@ def test_balance_matches_operations_after_series(
     savings_account = make_account(user, name="Копилка", kind="savings", initial_balance="10.00")
 
     created_bodies = [
-        build_expense_body(card_account, salary, kind="income", amount="35000"),
-        build_expense_body(card_account, groceries, amount="1250.50"),
-        build_expense_body(card_account, groceries, amount="0.01"),
-        build_expense_body(savings_account, groceries, amount="5.99"),
+        build_operation_body(card_account, salary, kind="income", amount="35000"),
+        build_operation_body(card_account, groceries, amount="1250.50"),
+        build_operation_body(card_account, groceries, amount="0.01"),
+        build_operation_body(savings_account, groceries, amount="5.99"),
     ]
 
     for body in created_bodies:
@@ -473,3 +467,81 @@ def test_balance_matches_operations_after_series(
     assert balances == expected_balances
     assert balances == {"Карта": Decimal("30749.49"), "Копилка": Decimal("4004.01")}
     assert Decimal(response.json()["total_balance"]) == sum(expected_balances.values())
+
+
+@pytest.mark.usefixtures("signed_in_user")
+def test_update_operation_rejects_foreign_and_missing_references(
+    send_json: JsonSender,
+    card_account: Account,
+    foreign_account: Account,
+    groceries: Category,
+    other_user: User,
+) -> None:
+    foreign_category = Category.objects.create(user=other_user, name="Рыбалка", kind="expense")
+    operation = make_operation(card_account, groceries)
+    foreign_body = {"account_id": foreign_account.id, "category_id": foreign_category.id}
+    foreign_response = send_json("PATCH", build_operation_url(operation), foreign_body)
+    missing_body = {"account_id": card_account.id + 1000, "category_id": groceries.id + 1000}
+    missing_response = send_json("PATCH", build_operation_url(operation), missing_body)
+    operation.refresh_from_db()
+
+    assert foreign_response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert read_messages(foreign_response) == {"account_id": "Счёт не найден", "category_id": "Категория не найдена"}
+    assert read_messages(missing_response) == {"account_id": "Счёт не найден", "category_id": "Категория не найдена"}
+    assert operation.account_id == card_account.id
+    assert operation.category_id == groceries.id
+
+
+@pytest.mark.usefixtures("signed_in_user")
+def test_update_operation_keeps_account_currency(send_json: JsonSender, user: User, card_account: Account, groceries: Category) -> None:
+    # Счёт в валюте API пока не открывает, поэтому он создаётся напрямую, как появится после загрузки курсов
+    dollar_account = Account.objects.create(user=user, name="Доллары", kind="cash", currency="USD")
+    operation = make_operation(card_account, groceries)
+    response = send_json("PATCH", build_operation_url(operation), {"account_id": dollar_account.id})
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert read_messages(response) == {"account_id": "Счёт можно сменить только на счёт в той же валюте"}
+
+
+@pytest.mark.usefixtures("signed_in_user")
+def test_update_operation_with_empty_body_changes_nothing(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
+    operation = make_operation(card_account, groceries, "42.00", note="Хлеб")
+    response = send_json("PATCH", build_operation_url(operation), {})
+    operation.refresh_from_db()
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["amount"] == "42.00"
+    assert operation.note == "Хлеб"
+
+
+@pytest.mark.usefixtures("signed_in_user")
+@pytest.mark.parametrize(
+    ("query", "expected_dates"),
+    [("?date_from=2026-11-10", ["2026-11-20", "2026-11-10"]), ("?date_to=2026-11-10", ["2026-11-10", "2026-11-01"])],
+    ids=["from-only", "to-only"],
+)
+def test_list_operations_accepts_one_period_boundary(
+    send_json: JsonSender,
+    card_account: Account,
+    groceries: Category,
+    query: str,
+    expected_dates: list[str],
+) -> None:
+    for operation_date in (date(2026, 11, 1), date(2026, 11, 10), date(2026, 11, 20)):
+        make_operation(card_account, groceries, operation_date=operation_date)
+
+    response = send_json("GET", f"{OPERATIONS_URL}{query}")
+    dates = [item["date"] for item in response.json()["items"]]
+
+    assert response.status_code == HTTPStatus.OK
+    assert dates == expected_dates
+
+
+@pytest.mark.usefixtures("signed_in_user")
+def test_list_operations_page_far_beyond_end_is_empty(send_json: JsonSender, card_account: Account, groceries: Category) -> None:
+    # Без своей пагинации такой номер давал OFFSET больше bigint и ответ 500
+    make_operation(card_account, groceries)
+    response = send_json("GET", f"{OPERATIONS_URL}?page=200000000000000000")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {"items": [], "count": 1}

@@ -8,6 +8,7 @@ import { computed, ref } from "vue";
 import AccountCard from "../components/AccountCard.vue";
 import AccountDialog from "../components/AccountDialog.vue";
 import { useAccountMutations, useAccountsQuery } from "../composables/useAccounts";
+import { useBusyIds } from "../composables/useBusyIds";
 import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useNotifier } from "../composables/useNotifier";
 import { ApiError, describeError } from "../services/apiClient";
@@ -18,11 +19,15 @@ const SKELETON_CARD_COUNT = 3;
 // Общий баланс API отдаёт в рублях
 const TOTAL_CURRENCY = "RUB";
 const CANCEL_BUTTON = { label: "Отмена", severity: "secondary", outlined: true };
+const STALE_DATA_TEXT = "Список не обновился, на экране прежние данные";
+// Сервер в этом случае предлагает перенести счёт в архив, но счёт уже там
+const ARCHIVED_ACCOUNT_IN_USE_TEXT = "Счёт нельзя удалить: на него ссылаются операции. Он уже в архиве и скрыт из выбора";
 
 const { data, error, isError, isPending, refetch } = useAccountsQuery();
 const { deleteMutation, updateMutation } = useAccountMutations();
+const { busyIds: busyAccountIds, markBusy, releaseBusy } = useBusyIds();
 const confirm = useConfirm();
-const { notifyError, notifySuccess } = useNotifier();
+const { notifyError, notifyFailure, notifySuccess } = useNotifier();
 
 const isDialogOpen = ref(false);
 const editedAccount = ref<Account | null>(null);
@@ -34,6 +39,12 @@ const archivedAccounts = computed(() => accounts.value.filter((account) => accou
 const hasAccounts = computed(() => accounts.value.length > 0);
 const totalBalanceText = computed(() => formatMoney(data.value?.totalBalance ?? "0.00", TOTAL_CURRENCY));
 const loadErrorText = computed(() => describeError(error.value));
+const refreshErrorText = computed(() => `${STALE_DATA_TEXT}. ${loadErrorText.value}`);
+
+// Сорвавшееся фоновое обновление не прячет уже загруженный список: он остаётся на экране с пометкой
+const hasData = computed(() => data.value !== undefined);
+const hasLoadError = computed(() => isError.value && !hasData.value);
+const hasRefreshError = computed(() => isError.value && hasData.value);
 
 function openCreateDialog(): void {
     editedAccount.value = null;
@@ -50,17 +61,21 @@ function retryLoading(): void {
 }
 
 async function archiveAccount(account: Account): Promise<void> {
+    markBusy(account.id);
+
     try {
         await updateMutation.mutateAsync({ accountId: account.id, changes: { isArchived: true } });
         notifySuccess("Счёт перенесён в архив");
     } catch (archiveError) {
         notifyError(archiveError);
+    } finally {
+        releaseBusy(account.id);
     }
 }
 
 function offerArchive(account: Account, reason: string): void {
     confirm.require({
-        header: "Счёт нельзя удалить",
+        header: "Перенести счёт в архив?",
         message: reason,
         acceptProps: { label: "Перенести в архив" },
         rejectProps: CANCEL_BUTTON,
@@ -69,20 +84,34 @@ function offerArchive(account: Account, reason: string): void {
     });
 }
 
+function showRemovalError(account: Account, removalError: unknown): void {
+    const isAccountInUse = removalError instanceof ApiError && removalError.code === "account_in_use";
+
+    if (!isAccountInUse) {
+        notifyError(removalError);
+
+        return;
+    }
+
+    if (account.isArchived) {
+        notifyFailure(ARCHIVED_ACCOUNT_IN_USE_TEXT);
+
+        return;
+    }
+
+    offerArchive(account, removalError.message);
+}
+
 async function removeAccount(account: Account): Promise<void> {
+    markBusy(account.id);
+
     try {
         await deleteMutation.mutateAsync(account.id);
         notifySuccess("Счёт удалён");
     } catch (removalError) {
-        const isAccountInUse = removalError instanceof ApiError && removalError.code === "account_in_use";
-
-        if (isAccountInUse) {
-            offerArchive(account, removalError.message);
-
-            return;
-        }
-
-        notifyError(removalError);
+        showRemovalError(account, removalError);
+    } finally {
+        releaseBusy(account.id);
     }
 }
 
@@ -111,7 +140,7 @@ function confirmRemoval(account: Account): void {
             </template>
         </div>
 
-        <div v-else-if="isError" class="state-card">
+        <div v-else-if="hasLoadError" class="state-card">
             <Message severity="error" :closable="false">{{ loadErrorText }}</Message>
             <div>
                 <Button label="Повторить" severity="secondary" outlined @click="retryLoading" />
@@ -127,6 +156,13 @@ function confirmRemoval(account: Account): void {
         </div>
 
         <template v-else>
+            <Message v-if="hasRefreshError" severity="warn" :closable="false">
+                <div class="inline-notice">
+                    <span>{{ refreshErrorText }}</span>
+                    <Button label="Повторить" size="small" severity="secondary" outlined @click="retryLoading" />
+                </div>
+            </Message>
+
             <section class="total-card" aria-label="Общий баланс">
                 <p class="total-card__label">Общий баланс</p>
                 <p class="total-card__amount money">{{ totalBalanceText }}</p>
@@ -140,6 +176,7 @@ function confirmRemoval(account: Account): void {
                         v-for="account in activeAccounts"
                         :key="account.id"
                         :account="account"
+                        :is-busy="busyAccountIds.has(account.id)"
                         @edit="openEditDialog"
                         @remove="confirmRemoval"
                     />
@@ -153,6 +190,7 @@ function confirmRemoval(account: Account): void {
                         v-for="account in archivedAccounts"
                         :key="account.id"
                         :account="account"
+                        :is-busy="busyAccountIds.has(account.id)"
                         @edit="openEditDialog"
                         @remove="confirmRemoval"
                     />

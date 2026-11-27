@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { buildErrorId, buildHintId, buildLabelId } from "../utils/formIds";
+
 const props = defineProps<{
     label: string;
     inputId: string;
@@ -9,14 +11,25 @@ const props = defineProps<{
     isRequired?: boolean;
 }>();
 
-const errorId = computed(() => `${props.inputId}-error`);
-const hintId = computed(() => `${props.inputId}-hint`);
+const labelId = computed(() => buildLabelId(props.inputId));
+const errorId = computed(() => buildErrorId(props.inputId));
+const hintId = computed(() => buildHintId(props.inputId));
 const hasError = computed(() => Boolean(props.error));
+
+// Атрибут for связывает подпись только с полями ввода, а поле выбора PrimeVue — это span, поэтому его фокусирует щелчок по подписи
+function focusField(): void {
+    const field = document.getElementById(props.inputId);
+    const isNativelyLabelled = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLButtonElement;
+
+    if (field !== null && !isNativelyLabelled) {
+        field.focus();
+    }
+}
 </script>
 
 <template>
     <div class="form-field">
-        <label class="form-field__label" :for="inputId">
+        <label :id="labelId" class="form-field__label" :for="inputId" @click="focusField">
             {{ label }}
             <span v-if="isRequired" class="form-field__required" aria-hidden="true">*</span>
         </label>
@@ -36,6 +49,7 @@ const hasError = computed(() => Boolean(props.error));
 .form-field {
     display: grid;
     gap: 0.375rem;
+    min-width: 0;
 }
 
 .form-field__label {

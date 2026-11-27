@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import Button from "primevue/button";
 import { computed, onMounted, version as vueVersion } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 
 import ServiceCard from "../components/ServiceCard.vue";
 import { useHealthCheck } from "../composables/useHealthCheck";
 import type { ServiceDetail } from "../types/health";
+import { readReturnPath } from "../utils/returnPath";
 
 const EMPTY_VALUE = "нет данных";
 
+const route = useRoute();
 const { apiState, checkNow, checkedAt, databaseState, isChecking, lastResult } = useHealthCheck();
 
 const timeFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -87,6 +90,17 @@ const lastCheckText = computed(() => {
     return `Последняя проверка в ${timeFormatter.format(checkedAt.value)}`;
 });
 
+// Сюда защита маршрутов уводит, когда API не ответил. Исходная страница сохранена в адресе, и к ней можно вернуться
+const returnPath = computed(() => {
+    const nextValue = route.query.next;
+
+    if (typeof nextValue !== "string") {
+        return null;
+    }
+
+    return readReturnPath(nextValue);
+});
+
 const buttonLabel = computed(() => {
     if (isChecking.value) {
         return "Проверка…";
@@ -114,6 +128,10 @@ onMounted(() => {
             <p class="summary__title">{{ summaryText }}</p>
             <p class="summary__meta">{{ lastCheckText }}</p>
         </section>
+
+        <p v-if="returnPath !== null">
+            <RouterLink :to="returnPath">Вернуться на прежнюю страницу</RouterLink>
+        </p>
 
         <section aria-labelledby="services-title">
             <h2 id="services-title" class="section-title">Сервисы</h2>

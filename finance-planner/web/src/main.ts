@@ -37,6 +37,7 @@ application.use(PrimeVue, {
 setUnauthenticatedHandler(() => {
     const session = useSessionStore(pinia);
     const currentRoute = router.currentRoute.value;
+
     session.forgetUser();
     queryClient.clear();
 
@@ -45,7 +46,5 @@ setUnauthenticatedHandler(() => {
     }
 });
 
-// Первый переход ждёт ответа о сессии, поэтому страница монтируется уже на верном маршруте
-void router.isReady().then(() => {
-    application.mount("#app");
-});
+// Приложение монтируется сразу: пока идёт первая проверка сессии, App.vue сам показывает индикатор или сбой загрузки
+application.mount("#app");

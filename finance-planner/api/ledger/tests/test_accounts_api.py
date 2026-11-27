@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from decimal import Decimal
 from http import HTTPStatus
 
 from django.http import HttpResponse
@@ -171,9 +172,12 @@ def test_update_account_changes_allowed_fields(send_json: JsonSender, card_accou
 @pytest.mark.usefixtures("signed_in_user")
 def test_update_account_with_empty_body_changes_nothing(send_json: JsonSender, card_account: Account) -> None:
     response = send_json("PATCH", build_account_url(card_account), {})
+    card_account.refresh_from_db()
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["name"] == "Карта"
+    assert card_account.name == "Карта"
+    assert card_account.initial_balance == Decimal("1000.00")
 
 
 @pytest.mark.usefixtures("signed_in_user")
@@ -235,3 +239,12 @@ def test_account_id_must_be_integer(send_json: JsonSender) -> None:
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert read_errors(response) == [("account_id", "int_parsing")]
+
+
+def test_list_accounts_is_sorted_by_id(send_json: JsonSender, signed_in_user: User) -> None:
+    second_account = make_account(signed_in_user, name="Яблоко")
+    first_account = make_account(signed_in_user, name="Абрикос")
+    response = send_json("GET", ACCOUNTS_URL)
+    account_ids = [item["id"] for item in response.json()["items"]]
+
+    assert account_ids == [second_account.id, first_account.id]

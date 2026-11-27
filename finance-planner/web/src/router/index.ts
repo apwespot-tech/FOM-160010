@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import type { RouteLocationNormalized, RouteLocationRaw } from "vue-router";
 
 import { useSessionStore } from "../stores/session";
+import { readReturnPath } from "../utils/returnPath";
 
 const APPLICATION_TITLE = "Финансовый планер";
 
@@ -78,29 +79,20 @@ export const router = createRouter({
     ],
 });
 
-export function readReturnPath(route: RouteLocationNormalized): string {
-    const nextPath = route.query.next;
+type GuardedRoute = Pick<RouteLocationNormalized, "fullPath" | "meta" | "query">;
 
-    // Возврат только на свой путь: адрес вида //example.com увёл бы на чужой сайт
-    const isOwnPath = typeof nextPath === "string" && nextPath.startsWith("/") && !nextPath.startsWith("//");
-
-    if (isOwnPath) {
-        return nextPath;
-    }
-
-    return "/";
-}
-
-async function checkAccess(to: RouteLocationNormalized): Promise<RouteLocationRaw | true> {
+export async function checkAccess(to: GuardedRoute): Promise<RouteLocationRaw | true> {
     if (to.meta.isPublic && !to.meta.isGuestOnly) {
         return true;
     }
 
     const session = useSessionStore();
+
     await session.loadCurrentUser();
 
+    // Исходная страница уходит в адрес проверки сервисов, чтобы к ней можно было вернуться, когда API ответит
     if (session.hasLoadFailed && !to.meta.isPublic) {
-        return { name: "status" };
+        return { name: "status", query: { next: to.fullPath } };
     }
 
     if (!to.meta.isPublic && !session.isAuthenticated) {
@@ -108,7 +100,7 @@ async function checkAccess(to: RouteLocationNormalized): Promise<RouteLocationRa
     }
 
     if (to.meta.isGuestOnly && session.isAuthenticated) {
-        return readReturnPath(to);
+        return readReturnPath(to.query.next);
     }
 
     return true;

@@ -2,10 +2,13 @@
 import Button from "primevue/button";
 import DatePicker from "primevue/datepicker";
 import Select from "primevue/select";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
+import FilterClearButton from "./FilterClearButton.vue";
+import FormField from "./FormField.vue";
 import type { Account, Category, OperationFilters } from "../types/ledger";
 import { isoDateToLocalDate, localDateToIsoDate } from "../utils/dates";
+import { buildLabelId } from "../utils/formIds";
 import { CATEGORY_KIND_LABELS, OPERATION_KIND_OPTIONS } from "../utils/ledgerLabels";
 
 interface OptionGroup {
@@ -18,6 +21,9 @@ const DATE_TO_INPUT_ID = "filter-date-to";
 const ACCOUNT_INPUT_ID = "filter-account";
 const CATEGORY_INPUT_ID = "filter-category";
 const KIND_INPUT_ID = "filter-kind";
+const ACCOUNT_LABEL_ID = buildLabelId(ACCOUNT_INPUT_ID);
+const CATEGORY_LABEL_ID = buildLabelId(CATEGORY_INPUT_ID);
+const KIND_LABEL_ID = buildLabelId(KIND_INPUT_ID);
 
 const props = defineProps<{
     accounts: Account[];
@@ -121,6 +127,16 @@ const kind = computed<OperationFilters["kind"]>({
 function requestReset(): void {
     emit("reset");
 }
+
+function focusField(inputId: string): void {
+    document.getElementById(inputId)?.focus();
+}
+
+// После очистки крестик пропадает, поэтому фокус возвращается в само поле, а не теряется
+function clearFilter(event: MouseEvent, clearCallback: (event: Event) => void, inputId: string): void {
+    clearCallback(event);
+    void nextTick(() => focusField(inputId));
+}
 </script>
 
 <template>
@@ -136,8 +152,7 @@ function requestReset(): void {
         </button>
 
         <div id="operation-filter-fields" class="operation-filters__fields">
-            <div class="operation-filters__field">
-                <label :for="DATE_FROM_INPUT_ID">С даты</label>
+            <FormField label="С даты" :input-id="DATE_FROM_INPUT_ID">
                 <DatePicker
                     v-model="dateFrom"
                     :input-id="DATE_FROM_INPUT_ID"
@@ -146,10 +161,9 @@ function requestReset(): void {
                     show-button-bar
                     fluid
                 />
-            </div>
+            </FormField>
 
-            <div class="operation-filters__field">
-                <label :for="DATE_TO_INPUT_ID">По дату</label>
+            <FormField label="По дату" :input-id="DATE_TO_INPUT_ID">
                 <DatePicker
                     v-model="dateTo"
                     :input-id="DATE_TO_INPUT_ID"
@@ -158,27 +172,31 @@ function requestReset(): void {
                     show-button-bar
                     fluid
                 />
-            </div>
+            </FormField>
 
-            <div class="operation-filters__field">
-                <label :for="ACCOUNT_INPUT_ID">Счёт</label>
+            <FormField label="Счёт" :input-id="ACCOUNT_INPUT_ID">
                 <Select
                     v-model="accountId"
                     :input-id="ACCOUNT_INPUT_ID"
+                    :aria-labelledby="ACCOUNT_LABEL_ID"
                     :options="accountOptions"
                     option-label="label"
                     option-value="value"
                     placeholder="Все счета"
                     show-clear
                     fluid
-                />
-            </div>
+                >
+                    <template #clearicon="{ clearCallback }">
+                        <FilterClearButton label="Снять фильтр по счёту" @clear="clearFilter($event, clearCallback, ACCOUNT_INPUT_ID)" />
+                    </template>
+                </Select>
+            </FormField>
 
-            <div class="operation-filters__field">
-                <label :for="CATEGORY_INPUT_ID">Категория</label>
+            <FormField label="Категория" :input-id="CATEGORY_INPUT_ID">
                 <Select
                     v-model="categoryId"
                     :input-id="CATEGORY_INPUT_ID"
+                    :aria-labelledby="CATEGORY_LABEL_ID"
                     :options="categoryGroups"
                     option-label="label"
                     option-value="value"
@@ -189,22 +207,30 @@ function requestReset(): void {
                     filter-placeholder="Поиск категории"
                     show-clear
                     fluid
-                />
-            </div>
+                >
+                    <template #clearicon="{ clearCallback }">
+                        <FilterClearButton label="Снять фильтр по категории" @clear="clearFilter($event, clearCallback, CATEGORY_INPUT_ID)" />
+                    </template>
+                </Select>
+            </FormField>
 
-            <div class="operation-filters__field">
-                <label :for="KIND_INPUT_ID">Вид</label>
+            <FormField label="Вид" :input-id="KIND_INPUT_ID">
                 <Select
                     v-model="kind"
                     :input-id="KIND_INPUT_ID"
+                    :aria-labelledby="KIND_LABEL_ID"
                     :options="OPERATION_KIND_OPTIONS"
                     option-label="label"
                     option-value="value"
                     placeholder="Все виды"
                     show-clear
                     fluid
-                />
-            </div>
+                >
+                    <template #clearicon="{ clearCallback }">
+                        <FilterClearButton label="Снять фильтр по виду" @clear="clearFilter($event, clearCallback, KIND_INPUT_ID)" />
+                    </template>
+                </Select>
+            </FormField>
 
             <div class="operation-filters__actions">
                 <Button label="Сбросить" severity="secondary" outlined :disabled="!hasActiveFilters" @click="requestReset" />
@@ -231,17 +257,6 @@ function requestReset(): void {
 
 .operation-filters__toggle {
     display: none;
-}
-
-.operation-filters__field {
-    display: grid;
-    gap: 0.375rem;
-    min-width: 0;
-}
-
-.operation-filters__field label {
-    font-size: 0.875rem;
-    font-weight: 600;
 }
 
 .operation-filters__actions {

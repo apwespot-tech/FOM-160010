@@ -9,10 +9,12 @@ function padDatePart(value: number): string {
 // Части даты берутся из Intl с латинскими цифрами: так «сегодня» считается в поясе пользователя, а не браузера
 export function formatIsoDateInTimeZone(moment: Date, timeZone: string): string {
     const formatter = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-    const parts = formatter.formatToParts(moment);
-    const readPart = (partType: string): string => parts.find((part) => part.type === partType)?.value ?? "";
+    const partValues = new Map(formatter.formatToParts(moment).map((part) => [part.type, part.value]));
+    const year = partValues.get("year") ?? "";
+    const month = partValues.get("month") ?? "";
+    const day = partValues.get("day") ?? "";
 
-    return `${readPart("year")}-${readPart("month")}-${readPart("day")}`;
+    return `${year}-${month}-${day}`;
 }
 
 export function readTodayInTimeZone(timeZone: string): string {

@@ -11,6 +11,8 @@ const UNSAFE_METHODS: ReadonlySet<HttpMethod> = new Set(["POST", "PATCH", "DELET
 const PLANNER_ERROR_TYPES: ReadonlySet<string> = new Set(["planner_format", "planner_rule"]);
 
 const NETWORK_FAILURE_TEXT = "Нет связи с сервером. Проверьте подключение и повторите попытку";
+const TIMEOUT_TEXT = "Сервер не ответил за 15 секунд. Повторите попытку позже";
+const TIMEOUT_ERROR_NAME = "TimeoutError";
 const UNEXPECTED_RESPONSE_TEXT = "Сервер ответил неожиданно. Повторите попытку позже";
 const FORM_ERRORS_TEXT = "Проверьте поля формы";
 const MISSING_FIELD_TEXT = "Заполните поле";
@@ -49,7 +51,7 @@ export class ApiError extends Error {
 let unauthenticatedHandler: (() => void) | null = null;
 let pendingCsrfRequest: Promise<void> | null = null;
 
-export function setUnauthenticatedHandler(handler: () => void): void {
+export function setUnauthenticatedHandler(handler: (() => void) | null): void {
     unauthenticatedHandler = handler;
 }
 
@@ -57,14 +59,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }
 
+function isValidationErrorItem(value: unknown): value is ValidationErrorItem {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    const hasLocation = Array.isArray(value.loc) && value.loc.length > 0;
+
+    return typeof value.type === "string" && typeof value.msg === "string" && hasLocation;
+}
+
 function isApiErrorBody(value: unknown): value is ApiErrorBody {
     if (!isRecord(value)) {
         return false;
     }
 
-    const hasDetail = typeof value.detail === "string" || Array.isArray(value.detail);
+    // Массив ошибок разбирается по элементам: тело другой формы показывается как неожиданный ответ, а не роняет разбор
+    const hasValidDetail = typeof value.detail === "string" || (Array.isArray(value.detail) && value.detail.every(isValidationErrorItem));
 
-    return typeof value.code === "string" && hasDetail;
+    return typeof value.code === "string" && hasValidDetail;
 }
 
 export function describeFieldError(item: ValidationErrorItem): string {
@@ -151,7 +164,14 @@ async function sendRequest(method: HttpMethod, url: string, headers: Record<stri
             credentials: "same-origin",
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
-    } catch {
+    } catch (error) {
+        // Тайм-аут не значит, что связи нет: сервер мог долго искать базу, поэтому у него свой текст
+        const isTimeout = error instanceof DOMException && error.name === TIMEOUT_ERROR_NAME;
+
+        if (isTimeout) {
+            throw new ApiError(null, "timeout", TIMEOUT_TEXT);
+        }
+
         throw new ApiError(null, "network_failed", NETWORK_FAILURE_TEXT);
     }
 }

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import Button from "primevue/button";
-import { computed } from "vue";
+import { computed, toRef } from "vue";
 
+import { useDelayedFlag } from "../composables/useDelayedFlag";
 import type { Account } from "../types/ledger";
 import { ACCOUNT_KIND_LABELS } from "../utils/ledgerLabels";
 import { formatMoney } from "../utils/money";
 
 const props = defineProps<{
     account: Account;
+    isBusy: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,6 +23,8 @@ const initialBalanceText = computed(() => formatMoney(props.account.initialBalan
 const editLabel = computed(() => `Изменить счёт «${props.account.name}»`);
 const removeLabel = computed(() => `Удалить счёт «${props.account.name}»`);
 const cardClasses = computed(() => ({ "account-card--archived": props.account.isArchived }));
+// Пока идёт удаление или перенос в архив, кнопки недоступны сразу, а индикатор появляется через 400 мс
+const isBusyVisible = useDelayedFlag(toRef(props, "isBusy"));
 
 function requestEdit(): void {
     emit("edit", props.account);
@@ -45,8 +49,17 @@ function requestRemoval(): void {
         </p>
 
         <footer class="account-card__actions">
-            <Button label="Изменить" size="small" severity="secondary" outlined :aria-label="editLabel" @click="requestEdit" />
-            <Button label="Удалить" size="small" severity="danger" text :aria-label="removeLabel" @click="requestRemoval" />
+            <Button label="Изменить" size="small" severity="secondary" outlined :aria-label="editLabel" :disabled="isBusy" @click="requestEdit" />
+            <Button
+                label="Удалить"
+                size="small"
+                severity="danger"
+                text
+                :aria-label="removeLabel"
+                :loading="isBusyVisible"
+                :disabled="isBusy"
+                @click="requestRemoval"
+            />
         </footer>
     </article>
 </template>

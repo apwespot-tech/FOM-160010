@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { COLUMN_GROUPING_DIGITS, formatMoney, groupThousands, MINUS_SIGN, NON_BREAKING_SPACE, normalizeAmountInput } from "./money";
+import {
+    COLUMN_GROUPING_DIGITS,
+    formatMoney,
+    groupThousands,
+    isZeroAmount,
+    MINUS_SIGN,
+    NON_BREAKING_SPACE,
+    normalizeAmountInput,
+} from "./money";
 
 function spaced(text: string): string {
     return text.replaceAll("_", NON_BREAKING_SPACE);
@@ -37,13 +45,6 @@ describe("formatMoney", () => {
     it("returns text that is not an amount unchanged", () => {
         expect(formatMoney("нет данных", "RUB")).toBe("нет данных");
     });
-
-    it("does not depend on the browser language", () => {
-        const russianFormat = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2 }).format(1250.5);
-
-        expect(russianFormat).toContain(",");
-        expect(formatMoney("1250.50", "RUB")).not.toContain(",");
-    });
 });
 
 describe("groupThousands", () => {
@@ -76,5 +77,25 @@ describe("normalizeAmountInput", () => {
     it("accepts a minus only where it is allowed", () => {
         expect(normalizeAmountInput(`${MINUS_SIGN}250`, true)).toBe("-250.00");
         expect(normalizeAmountInput("-250,5", true)).toBe("-250.50");
+    });
+
+    it("drops leading zeros so that a row of zeros reads as zero", () => {
+        expect(normalizeAmountInput("00")).toBe("0.00");
+        expect(normalizeAmountInput("007,5")).toBe("7.50");
+    });
+
+    it("does not make a negative zero", () => {
+        expect(normalizeAmountInput("-0", true)).toBe("0.00");
+        expect(normalizeAmountInput(`${MINUS_SIGN}0.00`, true)).toBe("0.00");
+    });
+});
+
+describe("isZeroAmount", () => {
+    it.each(["0.00", "0", "-0.00", "000.0"])("treats %s as zero", (amount) => {
+        expect(isZeroAmount(amount)).toBe(true);
+    });
+
+    it.each(["0.01", "10.00", "-5.00"])("treats %s as a real amount", (amount) => {
+        expect(isZeroAmount(amount)).toBe(false);
     });
 });

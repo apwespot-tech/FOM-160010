@@ -134,10 +134,6 @@ a:focus-visible {
     white-space: nowrap;
 }
 
-.auth-note {
-    color: var(--color-text-secondary);
-}
-
 .auth-form {
     display: grid;
     gap: 1rem;
@@ -207,8 +203,28 @@ a:focus-visible {
     font-size: 0.9375rem;
 }
 
+.inline-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
 @media (max-width: 40rem) {
     .page-heading__title {
         font-size: 1.5rem;
+    }
+}
+
+/* Стили PrimeVue сами не учитывают эту настройку: мигание заглушек, вращение индикаторов и переходы диалогов
+   отключаются здесь. Длительность не нулевая, чтобы переходы Vue всё равно получили событие окончания */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
     }
 }

@@ -31,18 +31,8 @@ COMMON_CATEGORIES = {
 
 
 @pytest.fixture
-def card_account(user: User) -> Account:
-    return Account.objects.create(user=user, name="Карта", kind="card", initial_balance=Decimal("1000.00"))
-
-
-@pytest.fixture
 def savings_account(user: User) -> Account:
     return Account.objects.create(user=user, name="Копилка", kind="savings")
-
-
-@pytest.fixture
-def groceries() -> Category:
-    return Category.objects.get(user=None, kind="expense", name="Продукты")
 
 
 @pytest.fixture

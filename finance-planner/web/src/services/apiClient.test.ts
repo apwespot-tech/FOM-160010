@@ -13,6 +13,7 @@ function readHeader(init: RequestInit | undefined, name: string): string | null 
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    setUnauthenticatedHandler(null);
     document.cookie = `${CSRF_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 });
 
@@ -65,6 +66,35 @@ describe("requestJson", () => {
         expect(init.credentials).toBe("same-origin");
     });
 
+    it("asks for a CSRF token first when the cookie is missing", async () => {
+        const fetchMock = vi.fn()
+            .mockImplementationOnce(async () => {
+                document.cookie = `${CSRF_COOKIE_NAME}=issued-token`;
+
+                return new Response(null, { status: 204 });
+            })
+            .mockResolvedValueOnce(createJsonResponse(201, { id: 3 }));
+
+        vi.stubGlobal("fetch", fetchMock);
+        await requestJson("/api/accounts", { method: "POST", body: { name: "Наличные" } });
+        const [, postInit] = fetchMock.mock.calls[1];
+
+        expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/csrf");
+        expect(readHeader(postInit, "X-CSRFToken")).toBe("issued-token");
+    });
+
+    it("sends a safe request without the CSRF header", async () => {
+        document.cookie = `${CSRF_COOKIE_NAME}=some-token`;
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse(200, { items: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await requestJson("/api/accounts");
+        const [, init] = fetchMock.mock.calls[0];
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(readHeader(init, "X-CSRFToken")).toBeNull();
+    });
+
     it("gets a new token and repeats the request once after csrf_failed", async () => {
         document.cookie = `${CSRF_COOKIE_NAME}=stale-token`;
 
@@ -84,6 +114,22 @@ describe("requestJson", () => {
         expect(fetchMock).toHaveBeenCalledTimes(3);
         expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/csrf");
         expect(readHeader(retriedInit, "X-CSRFToken")).toBe("fresh-token");
+    });
+
+    it("gives up after a second csrf_failed instead of repeating again", async () => {
+        document.cookie = `${CSRF_COOKIE_NAME}=stale-token`;
+        const csrfFailure = { code: "csrf_failed", detail: "Нет токена CSRF или он устарел" };
+
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(createJsonResponse(403, csrfFailure))
+            .mockResolvedValueOnce(new Response(null, { status: 204 }))
+            .mockResolvedValueOnce(createJsonResponse(403, csrfFailure));
+
+        vi.stubGlobal("fetch", fetchMock);
+        const request = requestJson("/api/auth/logout", { method: "POST" });
+
+        await expect(request).rejects.toMatchObject({ status: 403, code: "csrf_failed" });
+        expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
     it("turns a validation error into field errors", async () => {
@@ -124,6 +170,13 @@ describe("requestJson", () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<html>Bad gateway</html>", { status: 502 })));
 
         await expect(requestJson("/api/accounts")).rejects.toMatchObject({ status: 502, code: "unexpected_response" });
+    });
+
+    it("tells a timeout apart from a lost connection", async () => {
+        const timeoutError = new DOMException("The operation timed out", "TimeoutError");
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(timeoutError));
+
+        await expect(requestJson("/api/accounts")).rejects.toMatchObject({ status: null, code: "timeout" });
     });
 
     it("treats a lost connection as a network failure", async () => {

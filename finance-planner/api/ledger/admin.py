@@ -6,7 +6,10 @@ from ledger.models import Account, Category, Operation, Transfer
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
-    # Данные учёта меняются только через API: правила сервисов админка обходила бы
+    # Данные учёта меняются только через API: правила сервисов админка обходила бы.
+    # Признак читает админка пользователей: эти строки уходят каскадом вместе с владельцем
+    is_deleted_with_owner = True
+
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
 

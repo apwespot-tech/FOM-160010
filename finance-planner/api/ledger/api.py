@@ -25,11 +25,30 @@ from ledger.schemas import (
 
 OPERATIONS_PAGE_SIZE = 50
 OPERATIONS_MAX_PAGE_SIZE = 100
+
 # При равной дате порядок задаёт id в том же направлении, иначе строки одного дня менялись бы местами между страницами
-OPERATION_ORDERINGS = {
-    "-date": ("-date", "-id"),
-    "date": ("date", "id"),
-}
+OPERATION_ORDERINGS = {"-date": ("-date", "-id"), "date": ("date", "id")}
+
+class OperationPagination(PageNumberPagination):
+    # Страница за концом списка отдаёт пустой список без запроса строк: огромный номер страницы
+    # иначе превратился бы в OFFSET больше bigint, и PostgreSQL ответил бы ошибкой
+    def paginate_queryset(
+        self,
+        queryset: QuerySet,
+        pagination: PageNumberPagination.Input,
+        request: HttpRequest,
+        **params: object,
+    ) -> dict[str, object]:
+        page_size = self._get_page_size(pagination.page_size)
+        page_start = (pagination.page - 1) * page_size
+        page_end = page_start + page_size
+        total_count = queryset.count()
+
+        if page_start >= total_count:
+            return {self.items_attribute: [], "count": total_count}
+
+        return {self.items_attribute: queryset[page_start:page_end], "count": total_count}
+
 
 accounts_router = Router(tags=["Счета"])
 categories_router = Router(tags=["Категории"])
@@ -113,7 +132,7 @@ def delete_category(request: HttpRequest, category_id: int) -> Status[None]:
 
 
 @operations_router.get("", response=list[OperationOut], summary="История операций с фильтрами")
-@paginate(PageNumberPagination, page_size=OPERATIONS_PAGE_SIZE, max_page_size=OPERATIONS_MAX_PAGE_SIZE)
+@paginate(OperationPagination, page_size=OPERATIONS_PAGE_SIZE, max_page_size=OPERATIONS_MAX_PAGE_SIZE)
 def list_operations(request: HttpRequest, filters: Query[OperationFilter], sort: OperationSort = "-date") -> QuerySet[Operation]:
     operations = filters.filter(Operation.objects.for_user(request.user))
     ordering = OPERATION_ORDERINGS[sort]

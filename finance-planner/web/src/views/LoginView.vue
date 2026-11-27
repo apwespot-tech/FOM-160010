@@ -2,19 +2,19 @@
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Message from "primevue/message";
-import Password from "primevue/password";
 import { computed, reactive, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import AuthCard from "../components/AuthCard.vue";
 import FormField from "../components/FormField.vue";
+import PasswordField from "../components/PasswordField.vue";
+import { useDelayedFlag } from "../composables/useDelayedFlag";
 import { useFieldErrors } from "../composables/useFieldErrors";
-import { readReturnPath } from "../router";
 import { ApiError, describeError } from "../services/apiClient";
 import { useSessionStore } from "../stores/session";
 import { checkRequired } from "../utils/formChecks";
+import { buildReturnQuery, readReturnPath } from "../utils/returnPath";
 
-const REGISTER_ROUTE = { name: "register" };
 const STATUS_ROUTE = { name: "status" };
 const USERNAME_INPUT_ID = "login-username";
 const PASSWORD_INPUT_ID = "login-password";
@@ -29,9 +29,11 @@ const form = reactive({ username: "", password: "" });
 const formError = ref("");
 const isSubmitting = ref(false);
 
-const submitLabel = computed(() => (isSubmitting.value ? "Вход…" : "Войти"));
-const usernameDescription = computed(() => describeInput(USERNAME_INPUT_ID, "username"));
-const passwordInputProps = computed(() => ({ ...describeInput(PASSWORD_INPUT_ID, "password"), autocomplete: "current-password" }));
+const isSubmittingVisible = useDelayedFlag(isSubmitting);
+const submitLabel = computed(() => (isSubmittingVisible.value ? "Вход…" : "Войти"));
+const usernameDescription = computed(() => describeInput(USERNAME_INPUT_ID, "username", { isRequired: true }));
+const passwordDescription = computed(() => describeInput(PASSWORD_INPUT_ID, "password", { isRequired: true }));
+const registerRoute = computed(() => ({ name: "register", query: buildReturnQuery(route.query.next) }));
 
 function checkUsername(): void {
     setFieldError("username", checkRequired(form.username));
@@ -76,7 +78,7 @@ async function submit(): Promise<void> {
 
     try {
         await session.logIn(form.username, form.password);
-        await router.replace(readReturnPath(route));
+        await router.replace(readReturnPath(route.query.next));
     } catch (error) {
         showSubmitError(error);
     } finally {
@@ -103,26 +105,24 @@ async function submit(): Promise<void> {
             </FormField>
 
             <FormField label="Пароль" :input-id="PASSWORD_INPUT_ID" :error="fieldErrors.password" is-required>
-                <Password
+                <PasswordField
                     v-model="form.password"
                     :input-id="PASSWORD_INPUT_ID"
-                    :input-props="passwordInputProps"
-                    :feedback="false"
-                    :invalid="Boolean(fieldErrors.password)"
-                    toggle-mask
-                    fluid
+                    autocomplete="current-password"
+                    :description="passwordDescription"
+                    :is-invalid="Boolean(fieldErrors.password)"
                     @blur="checkPassword"
                 />
             </FormField>
 
             <Message v-if="formError" severity="error" :closable="false">{{ formError }}</Message>
 
-            <Button type="submit" :label="submitLabel" :loading="isSubmitting" :disabled="isSubmitting" fluid />
+            <Button type="submit" :label="submitLabel" :loading="isSubmittingVisible" :disabled="isSubmitting" fluid />
         </form>
 
         <p class="auth-links">
             <span>Нет аккаунта?</span>
-            <RouterLink :to="REGISTER_ROUTE">Зарегистрироваться</RouterLink>
+            <RouterLink :to="registerRoute">Зарегистрироваться</RouterLink>
         </p>
         <p class="auth-links">
             <RouterLink :to="STATUS_ROUTE">Состояние сервисов</RouterLink>

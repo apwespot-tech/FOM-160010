@@ -16,8 +16,13 @@ export function useNotifier() {
         toast.add({ severity: "error", summary: ERROR_SUMMARY, detail: describeError(error), life: NOTIFICATION_LIFE_MS });
     }
 
+    function notifyFailure(detail: string): void {
+        toast.add({ severity: "error", summary: ERROR_SUMMARY, detail, life: NOTIFICATION_LIFE_MS });
+    }
+
     return {
         notifyError,
+        notifyFailure,
         notifySuccess,
     };
 }
