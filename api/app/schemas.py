@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-
+from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -30,3 +30,25 @@ class UserOut(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class EventCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    event_date: datetime
+
+
+class EventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    event_date: datetime
+    invite_code: str
+    owner_id: int
+    participants_count: int = 0
+
+
+class EventDetail(EventOut):
+    participants: list[UserOut] = []
